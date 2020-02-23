@@ -66,7 +66,6 @@ class Projection:
 
                 #Read in Rotographs Ranking Predictions
 
-                #xls = pd.ExcelFile(os.path.join(path_data+str(year)+'/PositionalRankings/RotoGraphs/',rotographs_file))
                 if fn != 'DH':
                     kk = 1
                     self.hitters_rank[fn] = pd.read_excel(xls, fn, skiprows =1, usecols=['Rank','PLAYER'], index_col = 'Rank', names = ['Rank','PLAYER'])
@@ -96,8 +95,6 @@ class Projection:
         pitcher_positions = ['SP','RP']
         for fn in pitcher_positions:
             k = 1
-            #rotographs_file = fn+str('-Table 1.csv')
-            #self.pitchers_rank[fn] = pd.read_csv(os.path.join(path_data+str(year)+'/RotoGraphsPositionalRankings/', rotographs_file))
             self.pitchers_rank[fn] = pd.read_excel(xls, fn, skiprows =1, usecols=['Rank','PLAYER'], index_col = 'Rank', names = ['Rank','PLAYER'])
             #self.pitchers_rank[fn]['Drafted'] = 0
             for plr in self.pitchers_rank[fn]['PLAYER']:
