@@ -58,22 +58,26 @@ class Draft:
             idx_eligible = [i for i, val in enumerate(df.EligiblePosition.str.contains(ups)) if val]
 
             if len(idx_eligible) == 0 or idx_eligible[0] != 0:
-                # Check if there are UTIL positions left
-                df,drafted_player=df.drop(df.iloc[0:1].index),df.iloc[0:1]
+                # Check if there are UTIL positions left.  
+                df_copy,drafted_player=df.drop(df.iloc[0:1].index),df.iloc[0:1]
                 eligible_positions = drafted_player.EligiblePosition.values[0]
                 if drafted_player.EligiblePosition.str.contains('P').bool() == True:
                     if self.teams[team_key]['roster_spots']['P'] > 0:
                         position = 'P'
+                        df = df_copy
                     elif self.teams[team_key]['roster_spots']['BN'] > 0:
                         position = 'BN'
+                        df = df_copy
                     else:
                         position = 'No Roster Spots Left'
                         pick_ok = False
                 else:
                     if self.teams[team_key]['roster_spots']['UTIL'] > 0:
                         position = 'UTIL'
+                        df = df_copy
                     elif self.teams[team_key]['roster_spots']['BN'] > 0:
                         position = 'BN'
+                        df = df_copy
                     else:
                         position = 'No Roster Spots Left'
                         pick_ok = False
