@@ -1,7 +1,7 @@
+import copy
+import numpy as np
 import pandas as pd
 pd.options.mode.chained_assignment = None
-import numpy as np
-import copy
 
 class Draft:
 
@@ -41,18 +41,27 @@ class Draft:
         for iteam in np.arange(self.number_teams):
             raw_team_batting = teams[iteam]['batting_stats']
             raw_team_pitching = teams[iteam]['pitching_stats']
-            roto_team_batting = raw_team_batting.mean()
-            roto_team_pitching = raw_team_pitching.mean()
+            roto_team_batting = raw_team_batting.sum()
+            roto_team_pitching = raw_team_pitching.sum()
+
+            # Weight Rate Stats by the number of AB or IP
             if 'AVG' in raw_team_batting:
                 roto_team_batting['AVG'] = (raw_team_batting['AVG']*raw_team_batting['AB']).sum()/raw_team_batting['AB'].sum()
             if 'OPS' in raw_team_batting:
                 roto_team_batting['OPS'] = (raw_team_batting['OPS']*raw_team_batting['AB']).sum()/raw_team_batting['AB'].sum()
             if 'ERA' in raw_team_pitching:
-                roto_team_batting['ERA'] = (raw_team_pitching['ERA']*raw_team_pitching['IP']).sum()/raw_team_pitching['IP'].sum()
+                roto_team_pitching['ERA'] = (raw_team_pitching['ERA']*raw_team_pitching['IP']).sum()/raw_team_pitching['IP'].sum()
             if 'WHIP' in raw_team_pitching:
-                roto_team_batting['WHIP'] = (raw_team_pitching['WHIP']*raw_team_pitching['IP']).sum()/raw_team_pitching['IP'].sum()
+                roto_team_pitching['WHIP'] = (raw_team_pitching['WHIP']*raw_team_pitching['IP']).sum()/raw_team_pitching['IP'].sum()
             batting_stat_names = self.roto_stats_batting.columns.values.tolist()
             pitching_stat_names = self.roto_stats_pitching.columns.values.tolist()
+            #rate_stats = ['AVG','OPS','ERA','WHIP']
+            #for istats in batting_stat_names:
+            #    if istats in rate_stats:
+            #        roto_team_batting[istats] = (raw_team_batting[istats]*raw_team_batting['AB']).sum()/raw_team_batting['AB'].sum()
+            #for istats in pitching_stat_names:
+            #    if istats in rate_stats:
+            #        roto_team_pitching[istats] = (raw_team_pitching[istats]*raw_team_pitching['IP']).sum()/raw_team_pitching['IP'].sum()
             roto_stats_batting = roto_stats_batting.append(roto_team_batting[batting_stat_names],ignore_index = True)
             roto_stats_pitching = roto_stats_pitching.append(roto_team_pitching[pitching_stat_names],ignore_index = True)
 
@@ -70,9 +79,11 @@ class Draft:
                 roto_standings_cnts[avg_stat] = roto_standings_avgs[avg_stat]
         roto_standings = roto_standings_cnts.sum(axis=1).sort_values(ascending=False)
         roto_placement = roto_standings.index.get_loc(self.draft_position) + 1 # standings starting from 1 (not 0)
-        return roto_stats_batting, roto_stats_pitching, roto_standings, roto_placement
+        #pdb.set_trace()
+        return roto_team_stats, roto_stats_batting, roto_stats_pitching, roto_standings, roto_placement
 
     def draft_into_teams(self, single_team, drafted_player, position, show = False):
+        # Put the drafted_player with specified position into the roster of single_team.
 
         if show == True:
             print('Picked '+drafted_player.iloc[0].PLAYER+' for '+position)
@@ -88,10 +99,10 @@ class Draft:
             statline = self.player_projections.hitters_stats[idx_player][single_team['batting_stats'].keys()]
             single_team['batting_stats'] = single_team['batting_stats'].append(statline[0:1])
 
-        # Eliminate one roster_spot
+        # Subtract position spot from roster_spots
         single_team['roster_spots'][position] -= 1
 
-        # Add Player to Roster
+        # Add Player to single_team Roster
         if position in single_team['roster']:
             single_team['roster'][position] = [single_team['roster'][position], drafted_player.PLAYER.values[0:1]]
         else:
@@ -100,7 +111,7 @@ class Draft:
         return single_team
 
     def get_optimal_position(self, positions_in, roster_spots):
-        # Return in the order of most valuable position to fill
+        # In the event that player is eligible for more than one position, return the optimal position to fill
 
         # Split players eligible for more that one position, e.g., 1B/OF
         single_positions = positions_in.split('/')
@@ -167,11 +178,10 @@ class Draft:
     def draft_all(self):
         for iround in np.arange(self.number_rounds):
             self.teams, self.remaining_ranked_players = self.draft_round(iround, self.teams, self.remaining_ranked_players)
-            self.round_number += 1
-        self.roto_stats_batting, self.roto_stats_pitching, self.roto_standings, self.roto_placement = self.tabulate_roto(self.teams)
+        self.roto_team_stats, self.roto_stats_batting, self.roto_stats_pitching, self.roto_standings, self.roto_placement = self.tabulate_roto(self.teams)
 
     # Draft each round one team at a time.  When reaching "draft_position", stop and to pseudo_drafts to figure out best choice.
-    def draft_round(self, round_key, teams, df):
+    def draft_round(self, round_key, teams, df, naive_draft = False):
 
         # Reverse draft order every other round
         draft_order = np.arange(self.number_teams)
@@ -185,13 +195,16 @@ class Draft:
         # Draft each round one team at a time
         for iteam in draft_order:
 
-            # When team is draft_position, search for best pick.
-            if iteam == self.draft_position:
-                best_pick, best_position = self.find_best_pick(iteam, teams_copy, df_copy, round_key)
-                teams_copy, df_copy = self.draft_next_best(iteam, teams_copy, df_copy, force_pick = best_pick, force_position = best_position)
+            # Defaults to search for best picks at draft_position.  Skips when naive_draft == True
+            if naive_draft == False:
+                # When team is draft_position, search for best pick.
+                if iteam == self.draft_position:
+                    best_pick, best_position = self.find_best_pick(iteam, teams_copy, df_copy, round_key)
+                    teams_copy, df_copy = self.draft_next_best(iteam, teams_copy, df_copy, force_pick = best_pick, force_position = best_position)
+                else:
+                    teams_copy, df_copy = self.draft_next_best(iteam, teams, df_copy)
             else:
-                teams_copy, df_copy = self.draft_next_best(iteam, teams, df_copy)
-            #teams_copy, df_copy = self.draft_next_best(iteam, teams_copy, df_copy)
+                teams_copy, df_copy = self.draft_next_best(iteam, teams_copy, df_copy)
 
         return teams_copy, df_copy
 
@@ -220,7 +233,7 @@ class Draft:
 
         return teams_copy, df_copy
 
-    def find_best_pick(self, team_key, teams_copy, df_copy, round_key, silent == True):
+    def find_best_pick(self, team_key, teams_copy, df_copy, round_key, silent = False):
         # find_best_pick returns iloc, the index (of df) of the optimal pick, and the position being filled
 
         # Determine which roster_spots are still unfilled
@@ -280,12 +293,12 @@ class Draft:
             teams_loop, df_loop = self.draft_remaining(teams_loop, df_loop, round_key)
 
             # Calculate the best pseudo-standings
-            #pseudo_batting_stats, pseudo_pitching_stats, pseudo_standings, pseudo_placement = self.tabulate_roto(teams_loop)
+            #pseudo_team_stats, pseudo_batting_stats, pseudo_pitching_stats, pseudo_standings, pseudo_placement = self.tabulate_roto(teams_loop)
             roto_stats = self.tabulate_roto(teams_loop)
 
             # Store the result.
             player_based_drafted_teams[iplayer] = teams_loop[self.draft_position]['roster']
-            player_based_drafted_outcomes[iplayer] = [roto_stats[3],roto_stats[2][roto_stats[3]-1]]
+            player_based_drafted_outcomes[iplayer] = [roto_stats[4],roto_stats[3][roto_stats[4]-1]]
             if silent == False:
                 print('Stored Result for Pick '+str(icounter)+' '+iplayer+' '+pos_eligible[icounter]+' whose score is '+str(player_based_drafted_outcomes[iplayer]))
 
@@ -327,14 +340,14 @@ class Draft:
                         best_position = ranked_positions[irank]
                         break
 
-        try:
-            print('Best Pick is '+ best_player)
-        except:
-            pdb.set_trace()
+        #try:
+        #    print('Best Pick is '+ best_player)
+        #except:
+        #    pdb.set_trace()
 
         # Need to not fill UTIL if other opening exist...
-        if (best_position == 'UTIL'):
-            pdb.set_trace()
+        #if (best_position == 'UTIL'):
+        #    pdb.set_trace()
         #if (best_position == 'UTIL') & any(ranked_positions[irank] in s for s in best_player_positions):
 
         return best_pick_plus_one, best_position
@@ -348,7 +361,7 @@ class Draft:
             pick_ok = False
             idf = 0
             while (pick_ok == False):
-                df_copy = copy.deepcopy(df) #df.apply(deepcopy)
+                df_copy = copy.deepcopy(df)
                 pick_ok = True
 
                 # Draft next in list.  Do this way (idf) so that if you don't take player, they are not removed for next picker
@@ -378,7 +391,7 @@ class Draft:
                     teams[team_key] = self.draft_into_teams(teams[team_key], drafted_player,position, show = False)
 
         else:
-            print('Forcing Pick')
+
             pick_ok = True
             pick = force_pick - 1
             df,drafted_player=df.drop(df.iloc[pick:pick+1].index),df.iloc[pick:pick+1]
@@ -386,6 +399,16 @@ class Draft:
             position = force_position
 
             teams[team_key] = self.draft_into_teams(teams[team_key], drafted_player, position, show = False)
-            print('Team '+ str(team_key) +' force BEST pick '+drafted_player.iloc[0].PLAYER+' for '+position)
+            #if silent == False:
+            print('Team '+ str(team_key) +' Forced to pick '+drafted_player.iloc[0].PLAYER+' for '+position)
 
         return teams, df
+
+    def draft_from_list_and_find_best_pick(self, path_list = os.environ['BBPATH']+"GameDay2020/", draft_pick_file = 'TestPicks.xlsx'):
+        # Read in Excel Sheet and draft picks before moving on to finishing script
+
+        xls = pd.ExcelFile(os.path.join(path_list+'Draft_Pick_Spreadsheets/',draft_pick_file))
+        player_list = pd.read_excel(xls, skiprows =1, names = ['Rank','PLAYER','EligiblePosition'], index_col = 'Rank')
+
+    def filter_injured_list(self, path_list = os.environ['BBPATH']+"GameDay2020/", draft_pick_file = 'Injuries2020.xlsx'):
+        # Read in Excel Sheet of Players to Exclude.  Should this be moved to Projection?  Yes.
