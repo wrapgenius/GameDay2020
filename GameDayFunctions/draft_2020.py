@@ -70,18 +70,18 @@ class Draft:
         roto_team_stats = pd.concat([roto_stats_batting, roto_stats_pitching], axis=1, sort=False)
 
         # Find Rank in ascending and descending order (suboptimal?)
-        roto_standings_avgs = pd.concat([roto_stats_batting.rank(ascending=False), roto_stats_pitching.rank(ascending=False).rename(columns={"BB": "BBP"})], axis=1, sort=False)
-        roto_standings_cnts = pd.concat([roto_stats_batting.rank(), roto_stats_pitching.rank().rename(columns={"BB": "BBP"})], axis=1, sort=False)
+        roto_standings_desc = pd.concat([roto_stats_batting.rank(ascending=False), roto_stats_pitching.rank(ascending=False).rename(columns={"BB": "BBP"})], axis=1, sort=False)
+        roto_standings_ascn = pd.concat([roto_stats_batting.rank(), roto_stats_pitching.rank().rename(columns={"BB": "BBP"})], axis=1, sort=False)
 
         # Reverse rank of stats in which lower values are better.
-        avg_stats = ['CS','BBP','ERA','WHIP','BSV']
+        avg_stats = ['L','CS','BBP','ERA','WHIP','BSV']
         for avg_stat in avg_stats:
-            if avg_stat in roto_standings_avgs:
-                roto_standings_cnts[avg_stat] = roto_standings_avgs[avg_stat]
-        roto_standings = roto_standings_cnts.sum(axis=1).sort_values(ascending=False)
+            if avg_stat in roto_standings_desc:
+                roto_standings_ascn[avg_stat] = roto_standings_desc[avg_stat]
+        roto_standings = roto_standings_ascn.sum(axis=1).sort_values(ascending=False)
         roto_placement = roto_standings.index.get_loc(self.draft_position) + 1 # standings starting from 1 (not 0)
         #pdb.set_trace()
-        return roto_team_stats, roto_stats_batting, roto_stats_pitching, roto_standings, roto_placement
+        return roto_team_stats, roto_stats_batting, roto_stats_pitching, roto_standings, roto_placement, roto_standings_ascn
 
     def draft_into_teams(self, single_team, drafted_player, position, show = False):
         # Put the drafted_player with specified position into the roster of single_team.
@@ -179,7 +179,7 @@ class Draft:
     def draft_all(self):
         for iround in np.arange(self.number_rounds):
             self.teams, self.remaining_ranked_players = self.draft_round(iround, self.teams, self.remaining_ranked_players)
-        self.roto_team_stats, self.roto_stats_batting, self.roto_stats_pitching, self.roto_standings, self.roto_placement = self.tabulate_roto(self.teams)
+        self.roto_team_stats,self.roto_stats_batting,self.roto_stats_pitching,self.roto_standings,self.roto_placement,self.roto_team_stats_rank = self.tabulate_roto(self.teams)
 
     # Draft each round one team at a time.  When reaching "draft_position", stop and to pseudo_drafts to figure out best choice.
     def draft_round(self, round_key, teams, df, naive_draft = False):
@@ -229,8 +229,10 @@ class Draft:
                 draft_order = draft_order[starting_position:]
 
             # Finish the draft by picking the next best player in an open position
-            for iteam in draft_order:
-                teams_copy, df_copy = self.draft_next_best(iteam, teams_copy, df_copy)
+            # However, if drafting first or last, every other round will be the last pick.
+            if starting_position < self.number_teams:
+                for iteam in draft_order:
+                    teams_copy, df_copy = self.draft_next_best(iteam, teams_copy, df_copy)
 
         return teams_copy, df_copy
 
@@ -343,10 +345,15 @@ class Draft:
 
         # Need to not fill UTIL if other opening exist...
         if (best_position == 'UTIL'):
-            alternative_positions = best_player.EligiblePosition.values[0].split('/')
-            for ialt in range(len(alternative_positions)):
-                if any(alternative_positions[irank] in s for s in unfilled_positions):
-                    best_position = alternative_positions[irank]
+            alternative_positions = unfilled_positions
+            player_positions = best_player.EligiblePosition.values[0].split('/')
+            if any('P' in s for s in alternative_positions):
+                if 'SP' in alternative_positions: alternative_positions.remove('SP')
+                if 'RP' in alternative_positions: alternative_positions.remove('RP')
+                if 'P' in alternative_positions: alternative_positions.remove('P')
+            for altp in player_positions:
+                if any(altp in s for s in alternative_positions):
+                    best_position = altp
                     print('Swapping UTIL with '+ best_position)
 
         return best_pick_plus_one, best_position
