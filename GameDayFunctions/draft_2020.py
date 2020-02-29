@@ -1,3 +1,4 @@
+import os
 import copy
 import numpy as np
 import pandas as pd
@@ -264,9 +265,9 @@ class Draft:
         # Get rid of doubles (1B and OF is particularly prone)
         idx_eligible, idx_unique = np.unique(idx_eligible, return_index = True)
         pos_eligible = [pos_eligible[i] for i in idx_unique]
-        if silent == False:
-            print('Picking from:')
-            print(df_copy.iloc[idx_eligible])
+        #if silent == False:
+        #    print('Picking from:')
+        #    print(df_copy.iloc[idx_eligible])
 
         #################################
         # START OF LOOP TO FIND BEST PLAYER
@@ -313,7 +314,7 @@ class Draft:
         # If there is a tie for top relative_ranking, select by highest score, then optimal position
         n_max_ranking = sum(relative_ranking == np.min(relative_ranking))
         if n_max_ranking == 1:
-            best_player = df_copy.iloc[idx_eligible[relative_ranking_rank[0]]]
+            best_player = df_copy.iloc[idx_eligible[relative_ranking_rank[0]]:idx_eligible[relative_ranking_rank[0]]+1]
             best_pick_plus_one = idx_eligible[relative_ranking_rank[0]] + 1 # Avoid best_pick = 0
             best_position = pos_eligible[relative_ranking_rank[0]]
         else:
@@ -340,15 +341,13 @@ class Draft:
                         best_position = ranked_positions[irank]
                         break
 
-        #try:
-        #    print('Best Pick is '+ best_player)
-        #except:
-        #    pdb.set_trace()
-
         # Need to not fill UTIL if other opening exist...
-        #if (best_position == 'UTIL'):
-        #    pdb.set_trace()
-        #if (best_position == 'UTIL') & any(ranked_positions[irank] in s for s in best_player_positions):
+        if (best_position == 'UTIL'):
+            alternative_positions = best_player.EligiblePosition.values[0].split('/')
+            for ialt in range(len(alternative_positions)):
+                if any(alternative_positions[irank] in s for s in unfilled_positions):
+                    best_position = alternative_positions[irank]
+                    print('Swapping UTIL with '+ best_position)
 
         return best_pick_plus_one, best_position
         # END OF LOOP TO FIND BEST PLAYER
@@ -400,15 +399,18 @@ class Draft:
 
             teams[team_key] = self.draft_into_teams(teams[team_key], drafted_player, position, show = False)
             #if silent == False:
-            print('Team '+ str(team_key) +' Forced to pick '+drafted_player.iloc[0].PLAYER+' for '+position)
+            print('Team '+ str(team_key) +' picking '+drafted_player.iloc[0].PLAYER+' for '+position)
 
         return teams, df
 
-    def draft_from_list_and_find_best_pick(self, path_list = os.environ['BBPATH']+"GameDay2020/", draft_pick_file = 'TestPicks.xlsx'):
+    def draft_from_list_and_find_best_pick(self, path_list = os.environ['BBPATH']+"GameDay2020/'Draft_Pick_Spreadsheets/", draft_pick_file = 'TestPicks.xlsx'):
         # Read in Excel Sheet and draft picks before moving on to finishing script
 
-        xls = pd.ExcelFile(os.path.join(path_list+'Draft_Pick_Spreadsheets/',draft_pick_file))
-        player_list = pd.read_excel(xls, skiprows =1, names = ['Rank','PLAYER','EligiblePosition'], index_col = 'Rank')
+        xls = pd.ExcelFile(os.path.join(path_list,draft_pick_file))
+        player_list = pd.read_excel(xls, skiprows =1, names = ['Pick','PLAYER','EligiblePosition'], index_col = 'Pick')
 
-    def filter_injured_list(self, path_list = os.environ['BBPATH']+"GameDay2020/", draft_pick_file = 'Injuries2020.xlsx'):
+    def filter_injured_list(self, path_list = os.environ['BBPATH']+"GameDay2020/Injured_List_Spreadsheets", injured_list_file = 'Injuries2020.xlsx'):
         # Read in Excel Sheet of Players to Exclude.  Should this be moved to Projection?  Yes.
+
+        xls = pd.ExcelFile(os.path.join(path_list,injured_list_file))
+        injured_list = pd.read_excel(xls, skiprows =1, names = ['PLAYER'], index_col = 'PLAYER')
