@@ -9,6 +9,8 @@ Rankings are draft-order recommendations.  The default is to use Yahoo Rankings 
 
 _Your_ roto league may have more or less than 12 teams, or use different stats; that ok!  Declare them when defining the Draft object: most of the obvious stats are included, more obscure ones may require hacking into the [fangraphs_projection_2020](https://github.com/wrapgenius/GameDay2020/blob/master/GameDayFunctions/fangraphs_projection_2020.py).  Note, it can't _yet_ do AL or NL only. 
 
+Check out the [Notebook](https://github.com/wrapgenius/GameDay2020/blob/master/GameDay_Notebook.ipynb) for examples on how you can use it yourself.  
+
 ## Requirements
 - Python 3
 - Jupyter (Lab or Notebook; I use lab)
