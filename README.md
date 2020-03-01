@@ -5,7 +5,7 @@ The standard dilemma of fantasy baseball is who to choose next: the best availab
 And it's easy to use!  After [cloning](https://github.com/wrapgenius/GameDay2020) GameDay2020 (and provided you have Jupyter Notebooks with Python 3 installed, and a spreadsheet program) you should have everything you need to do a live roto draft.
 
 The code is based on two ingredients: *projections* and *rankings*.  Projections are estimates of player performances for 2020, and are based on data scraped from [Fangraphs](https://www.fangraphs.com/projections.aspx?pos=all&stats=bat&type=zips) (includes ZiPS, Steamer, and TheBat.) 
-Rankings are draft-order recommendations.  The default is to use Yahoo Rankings (from Feb 22, 2020).  Others include ESPN and Rotographs, or you can put in your own.  Yahoo for yahoo leagues makes most sense since it most closely imitates autodraft.    
+Rankings are draft-order recommendations.  The default is to use Yahoo Rankings (from Feb 22, 2020).  Others include ESPN and Rotographs, or you can put in your own.  If you are playing in a yahoo league, the Yahoo draft order makes most sense since it most closely imitates autodraft.    
 
 _Your_ roto league may have more or less than 12 teams, or use different stats; that ok!  Declare them when defining the Draft object: most of the obvious stats are included, more obscure ones may require hacking into the [fangraphs_projection_2020](https://github.com/wrapgenius/GameDay2020/blob/master/GameDayFunctions/fangraphs_projection_2020.py).  Note, it can't _yet_ do AL or NL only. 
 
