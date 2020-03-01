@@ -37,8 +37,15 @@ class Draft:
 
     # Find Resulting Standings
     def tabulate_roto(self, teams):
+        # Determine which stats to include in roto scores
+        batting_stat_names = self.roto_stats_batting.columns.values.tolist()
+        pitching_stat_names = self.roto_stats_pitching.columns.values.tolist()
+
+        # Estimate batting and pitching seperately and combine later
         roto_stats_batting = self.roto_stats_batting.copy()
         roto_stats_pitching = self.roto_stats_pitching.copy()
+
+        # Estimate Statlines for each team and append to roto_stats_batting/pitching
         for iteam in np.arange(self.number_teams):
             raw_team_batting = teams[iteam]['batting_stats']
             raw_team_pitching = teams[iteam]['pitching_stats']
@@ -46,16 +53,6 @@ class Draft:
             roto_team_pitching = raw_team_pitching.sum()
 
             # Weight Rate Stats by the number of AB or IP
-            #if 'AVG' in raw_team_batting:
-            #    roto_team_batting['AVG'] = (raw_team_batting['AVG']*raw_team_batting['AB']).sum()/raw_team_batting['AB'].sum()
-            #if 'OPS' in raw_team_batting:
-            #    roto_team_batting['OPS'] = (raw_team_batting['OPS']*raw_team_batting['AB']).sum()/raw_team_batting['AB'].sum()
-            #if 'ERA' in raw_team_pitching:
-            #    roto_team_pitching['ERA'] = (raw_team_pitching['ERA']*raw_team_pitching['IP']).sum()/raw_team_pitching['IP'].sum()
-            #if 'WHIP' in raw_team_pitching:
-            #    roto_team_pitching['WHIP'] = (raw_team_pitching['WHIP']*raw_team_pitching['IP']).sum()/raw_team_pitching['IP'].sum()
-            batting_stat_names = self.roto_stats_batting.columns.values.tolist()
-            pitching_stat_names = self.roto_stats_pitching.columns.values.tolist()
             rate_stats = ['AVG','OPS','ERA','WHIP']
             for istats in batting_stat_names:
                 if istats in rate_stats:
@@ -66,7 +63,7 @@ class Draft:
             roto_stats_batting = roto_stats_batting.append(roto_team_batting[batting_stat_names],ignore_index = True)
             roto_stats_pitching = roto_stats_pitching.append(roto_team_pitching[pitching_stat_names],ignore_index = True)
 
-        # Combine pitching and hitting into single DataFrame.  Need to add column headings?
+        # Combine pitching and hitting into single DataFrame.
         roto_team_stats = pd.concat([roto_stats_batting, roto_stats_pitching], axis=1, sort=False)
 
         # Find Rank in ascending and descending order (suboptimal?)
@@ -80,13 +77,13 @@ class Draft:
                 roto_standings_ascn[avg_stat] = roto_standings_desc[avg_stat]
         roto_standings = roto_standings_ascn.sum(axis=1).sort_values(ascending=False)
         roto_placement = roto_standings.index.get_loc(self.draft_position) + 1 # standings starting from 1 (not 0)
-        #pdb.set_trace()
+
         return roto_team_stats, roto_stats_batting, roto_stats_pitching, roto_standings, roto_placement, roto_standings_ascn
 
-    def draft_into_teams(self, single_team, drafted_player, position, show = False):
+    def draft_into_teams(self, single_team, drafted_player, position, silent = False):
         # Put the drafted_player with specified position into the roster of single_team.
 
-        if show == True:
+        if silent == False:
             print('Picked '+drafted_player.iloc[0].PLAYER+' for '+position)
 
         # Different Stats Entries for Pitchers and Batters
@@ -230,7 +227,8 @@ class Draft:
 
             # Finish the draft by picking the next best player in an open position
             # However, if drafting first or last, every other round will be the last pick.
-            if starting_position < self.number_teams:
+            # if starting_position < self.number_teams:
+            if len(draft_order) > 0:
                 for iteam in draft_order:
                     teams_copy, df_copy = self.draft_next_best(iteam, teams_copy, df_copy)
 
@@ -293,7 +291,7 @@ class Draft:
             df_loop,drafted_player=df_loop.drop(df_loop.iloc[iposition:iposition+1].index),df_loop.iloc[iposition:iposition+1]
             position = pos_eligible[icounter]
 
-            teams_loop[team_key] = self.draft_into_teams(teams_loop[team_key], drafted_player, position, show = False)
+            teams_loop[team_key] = self.draft_into_teams(teams_loop[team_key], drafted_player, position, silent = True)
 
             # LOOP OVER WHOLE REST OF THE DRAFT HERE...
             teams_loop, df_loop = self.draft_remaining(teams_loop, df_loop, round_key)
@@ -306,7 +304,7 @@ class Draft:
             player_based_drafted_teams[iplayer] = teams_loop[self.draft_position]['roster']
             player_based_drafted_outcomes[iplayer] = [roto_stats[4],roto_stats[3][roto_stats[4]-1]]
             if silent == False:
-                print('Stored Result for Pick '+str(icounter)+' '+iplayer+' '+pos_eligible[icounter]+' whose score is '+str(player_based_drafted_outcomes[iplayer]))
+                print('Stored Result for Pick '+str(icounter)+' '+iplayer+' '+pos_eligible[icounter]+' whose placing/score is '+str(player_based_drafted_outcomes[iplayer]))
 
         # End of Loop
         ranked_positions = ['C','2B','SS','OF','3B','1B','SP','RP','UTIL','P','BN']
@@ -399,7 +397,7 @@ class Draft:
                         print('Team '+ str(team_key) +' Drafting '+drafted_player.iloc[0].PLAYER+' for '+position)
                     df = df_copy
                     pick_ok = True
-                    teams[team_key] = self.draft_into_teams(teams[team_key], drafted_player,position, show = False)
+                    teams[team_key] = self.draft_into_teams(teams[team_key], drafted_player,position, silent = True)
 
         else:
 
@@ -409,7 +407,7 @@ class Draft:
             eligible_positions = drafted_player.EligiblePosition.values[0]
             position = force_position
 
-            teams[team_key] = self.draft_into_teams(teams[team_key], drafted_player, position, show = False)
+            teams[team_key] = self.draft_into_teams(teams[team_key], drafted_player, position, silent = True)
             #if silent == False:
             print('Team '+ str(team_key+1) +' picking '+drafted_player.iloc[0].PLAYER+' for '+position)
 
