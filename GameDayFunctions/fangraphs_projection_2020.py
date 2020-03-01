@@ -32,7 +32,7 @@ class Projection:
 
     '''
 
-    def __init__(self, model = 'ZiPS', year = 2020, path_data = os.environ['BBPATH']+"Fangraphs/projections/"):
+    def __init__(self, model = 'ZiPS', year = 2020, path_data = "projections/"):
         self.statline = {}
         self.all_rank = {}
         self.hitters_rank = {}

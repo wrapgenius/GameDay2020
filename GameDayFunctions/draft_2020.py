@@ -413,7 +413,7 @@ class Draft:
 
         return teams, df
 
-    def draft_from_list_and_find_best_pick(self,search_depth = 1,path_list = os.environ['BBPATH']+"GameDay2020/'Draft_Pick_Spreadsheets/", draft_pick_file = 'TestPicks.xlsx'):
+    def draft_from_list_and_find_best_pick(self,search_depth = 1, path_list = 'Draft_Pick_Spreadsheets/", draft_pick_file = 'TestPicks.xlsx'):
         # Read in Excel Sheet and draft picks before moving on to finishing script
 
         xls = pd.ExcelFile(os.path.join(path_list,draft_pick_file))
