@@ -173,13 +173,13 @@ class Draft:
             return 0
 
     # Do the entire draft one round at a time
-    def draft_all(self, naive_draft = False):
+    def draft_all(self, naive_draft = False, silent = True):
         for iround in np.arange(self.number_rounds):
-            self.teams, self.remaining_ranked_players = self.draft_round(iround, self.teams, self.remaining_ranked_players, naive_draft = naive_draft)
+            self.teams, self.remaining_ranked_players = self.draft_round(iround, self.teams, self.remaining_ranked_players, naive_draft = naive_draft, silent = silent)
         self.roto_team_stats,self.roto_stats_batting,self.roto_stats_pitching,self.roto_standings,self.roto_placement,self.roto_team_stats_rank = self.tabulate_roto(self.teams)
 
     # Draft each round one team at a time.  When reaching "draft_position", stop and to pseudo_drafts to figure out best choice.
-    def draft_round(self, round_key, teams, df, naive_draft = False):
+    def draft_round(self, round_key, teams, df, naive_draft = False, silent = True):
 
         # Reverse draft order every other round
         draft_order = np.arange(self.number_teams)
@@ -197,7 +197,7 @@ class Draft:
             if naive_draft == False:
                 # When team is draft_position, search for best pick.
                 if iteam == self.draft_position:
-                    best_pick, best_position = self.find_best_pick(iteam, teams_copy, df_copy, round_key)
+                    best_pick, best_position = self.find_best_pick(iteam, teams_copy, df_copy, round_key, silent = silent)
                     teams_copy, df_copy = self.draft_next_best(iteam, teams_copy, df_copy, force_pick = best_pick, force_position = best_position)
                 else:
                     teams_copy, df_copy = self.draft_next_best(iteam, teams, df_copy)
@@ -412,6 +412,9 @@ class Draft:
             print('Team '+ str(team_key+1) +' picking '+drafted_player.iloc[0].PLAYER+' for '+position)
 
         return teams, df
+
+    def draft_custom_pick_and_project_standings(self, custom_pick, path_list = 'Draft_Pick_Spreadsheets/', draft_pick_file = 'TestPicks.xlsx'):
+        print('Should be easy')
 
     def draft_from_list_and_find_best_pick(self,search_depth = 1, path_list = 'Draft_Pick_Spreadsheets/', draft_pick_file = 'TestPicks.xlsx'):
         # Read in Excel Sheet and draft picks before moving on to finishing script
