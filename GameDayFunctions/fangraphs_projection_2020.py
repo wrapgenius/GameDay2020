@@ -2,6 +2,7 @@ import pdb
 import os
 import pandas as pd
 import numpy as np
+#from . import standardize_name
 pd.options.mode.chained_assignment = None
 
 class Projection:
@@ -49,7 +50,7 @@ class Projection:
         elif ranking_method == 'ESPN':
             ranking_file = 'ESPN_Roto_Ranking_Full_'+str(year)+'.xlsx'
         elif ranking_method == 'FantasyPros':
-            ranking_file = 'FantasyPros_Roto_Ranking_'+str(year)+'.xlsx'
+            ranking_file = 'FantasyPros_Avg_Ranking_'+str(year)+'.xlsx'
         #else:
         #    ranking_file = ranking_file
 
@@ -59,7 +60,7 @@ class Projection:
         xls = pd.ExcelFile(os.path.join(path_data+str(year)+'/PositionalRankings/'+ranking_method+'/',ranking_file))
         self.all_rank = pd.read_excel(xls, skiprows = 0, names = ['Rank','PLAYER','EligiblePosition'], index_col = 'Rank')
         for irename in range(len(self.all_rank)):
-            self.all_rank.iloc[irename]['PLAYER'] = simplify_name(self.all_rank.iloc[irename]['PLAYER'])
+            self.all_rank.iloc[irename]['PLAYER'] = standardize_name(self.all_rank.iloc[irename]['PLAYER'])
 
         #pdb.set_trace()
         # Loop through all files in path.
@@ -122,6 +123,7 @@ class Projection:
                 if fn == 'RP':
                     self.pitchers_stats['SV'][ind] = np.floor(self.pitchers_stats['IP'][ind] * 0.5 * (1./self.pitchers_stats['WHIP'][ind]))
                     self.pitchers_stats['BSV'][ind] = np.floor(self.pitchers_stats['IP'][ind] * 0.05 * (1./self.pitchers_stats['WHIP'][ind]))
-def simplify_name(name_in):
-    name_out = (((name_in.replace('ñ','n')).replace('í','i')).replace('é','e')).split(' Jr.')
+
+def standardize_name(name_in):
+    name_out = ((((name_in.replace('ñ','n')).replace('í','i')).replace('é','e')).replace('á','a')).split(' Jr.')
     return name_out[0]

@@ -3,6 +3,7 @@ import os
 import copy
 import numpy as np
 import pandas as pd
+#from . import standardize_name
 pd.options.mode.chained_assignment = None
 
 class Draft:
@@ -12,7 +13,8 @@ class Draft:
                  number_teams = 12,
                  roster_spots = {'C':1,'1B':1,'2B':1, '3B':1,'SS':1,'OF':3,'UTIL':1,'SP':2,'RP':2,'P':3,'BN':5},
                  batter_stats  = ['AB','R','1B','2B', '3B','HR','RBI','SB','BB','AVG','OPS'],
-                 pitcher_stats = ['IP','W', 'L','CG','SHO','SV','BB','SO','ERA','WHIP','BSV'] ):
+                 pitcher_stats = ['IP','W', 'L','CG','SHO','SV','BB','SO','ERA','WHIP','BSV'],
+                 filter_injured_players = True ):
 
         self.number_teams = number_teams
         self.number_rounds = sum(roster_spots.values())
@@ -36,7 +38,8 @@ class Draft:
             roto_stats['roster'] = {}
             self.teams[i] = roto_stats
 
-        #self.filter_injured_list(path_list = "Injured_List_Spreadsheets/", injured_list_file = 'Injuries2020.xlsx')
+        if filter_injured_players == True:
+            self.filter_injured_list(path_list = "Injured_List_Spreadsheets/", injured_list_file = 'Injuries2020.xlsx')
 
     # Find Resulting Standings
     def tabulate_roto(self, teams):
@@ -176,13 +179,13 @@ class Draft:
             return 0
 
     # Do the entire draft one round at a time
-    def draft_all(self, naive_draft = False):
+    def draft_all(self, naive_draft = False, silent = True):
         for iround in np.arange(self.number_rounds):
-            self.teams, self.remaining_ranked_players = self.draft_round(iround, self.teams, self.remaining_ranked_players, naive_draft = naive_draft)
+            self.teams, self.remaining_ranked_players = self.draft_round(iround, self.teams, self.remaining_ranked_players, naive_draft = naive_draft, silent = silent)
         self.roto_team_stats,self.roto_stats_batting,self.roto_stats_pitching,self.roto_standings,self.roto_placement,self.roto_team_stats_rank = self.tabulate_roto(self.teams)
 
     # Draft each round one team at a time.  When reaching "draft_position", stop and to pseudo_drafts to figure out best choice.
-    def draft_round(self, round_key, teams, df, naive_draft = False):
+    def draft_round(self, round_key, teams, df, naive_draft = False, silent = True):
 
         # Reverse draft order every other round
         draft_order = np.arange(self.number_teams)
@@ -200,12 +203,12 @@ class Draft:
             if naive_draft == False:
                 # When team is draft_position, search for best pick.
                 if iteam == self.draft_position:
-                    best_pick, best_position = self.find_best_pick(iteam, teams_copy, df_copy, round_key)
-                    teams_copy, df_copy = self.draft_next_best(iteam, teams_copy, df_copy, force_pick = best_pick, force_position = best_position)
+                    best_pick, best_position = self.find_best_pick(iteam, teams_copy, df_copy, round_key, silent = silent)
+                    teams_copy, df_copy = self.draft_next_best(iteam, teams_copy, df_copy, force_pick = best_pick, force_position = best_position, silent = silent)
                 else:
-                    teams_copy, df_copy = self.draft_next_best(iteam, teams, df_copy)
+                    teams_copy, df_copy = self.draft_next_best(iteam, teams, df_copy, silent = silent)
             else:
-                teams_copy, df_copy = self.draft_next_best(iteam, teams_copy, df_copy)
+                teams_copy, df_copy = self.draft_next_best(iteam, teams_copy, df_copy, silent = silent)
 
         return teams_copy, df_copy
 
@@ -416,14 +419,14 @@ class Draft:
 
         return teams, df
 
-    def draft_from_list_and_find_best_pick(self,search_depth = 1, path_list = 'Draft_Pick_Spreadsheets/', draft_pick_file = 'TestPicks.xlsx'):
+    def draft_from_list_and_find_best_pick(self,search_depth = 1, path_list = 'Draft_Pick_Spreadsheets/', draft_pick_file = 'TestPicks.xlsx', silent = False):
         # Read in Excel Sheet and draft picks before moving on to finishing script
 
         xls = pd.ExcelFile(os.path.join(path_list,draft_pick_file))
         complete_player_list = pd.read_excel(xls, skiprows =0, names = ['Pick','PLAYER','EligiblePosition'], index_col = 'Pick')
         player_list = complete_player_list.loc[complete_player_list.index.dropna().values]
         for irename in range(len(player_list)):
-            player_list.iloc[irename]['PLAYER'] = simplify_name(player_list.iloc[irename]['PLAYER'])
+            player_list.iloc[irename]['PLAYER'] = standardize_name(player_list.iloc[irename]['PLAYER'])
 
         teams_copy = copy.deepcopy(self.teams)
         df_copy = copy.deepcopy(self.remaining_ranked_players)
@@ -452,7 +455,8 @@ class Draft:
                 break
 
         # Find best pick
-        print('Finding Best Pick For Team '+str(iteam+1+iter_team))
+        if silent == False:
+            print('Finding Best Pick For Team '+str(iteam+1+iter_team))
         best_pick, best_position = self.find_best_pick(iteam+iter_team,copy.deepcopy(teams_copy),copy.deepcopy(df_copy),iround,silent=False,search_depth = 1)
         best_player_this_round = df_copy.iloc[best_pick-1].PLAYER
         teams_copy, df_copy = self.draft_next_best(iteam+iter_team, teams_copy, df_copy, force_pick = best_pick, force_position = best_position)
@@ -462,7 +466,8 @@ class Draft:
 
         # Calculate the best pseudo-standings
         roto_stats = self.tabulate_roto(teams_copy)
-        print('Best Pick is ' + best_player_this_round+ ' putting you in ' + str(roto_stats[4]) + ' place')
+        if silent == False:
+            print('Best Pick is ' + best_player_this_round+ ' putting you in ' + str(roto_stats[4]) + ' place')
 
         # Return Player Name and Projected Roto Stats
         return best_player_this_round, roto_stats
@@ -471,24 +476,21 @@ class Draft:
         # Read in Excel Sheet of Players to Exclude.  Should this be moved to Projection?  Yes.
 
         xls = pd.ExcelFile(os.path.join(path_list,injured_list_file))
-        injured_list = pd.read_excel(xls, skiprows =0, names = ['PLAYER'], index_col = 'PLAYER')
+        #pdb.set_trace()
+        injured_list = pd.read_excel(xls, skiprows =0, names = ['PLAYER','Elig. Pos.'])#, index_col = 'PLAYER')
         #xls = pd.ExcelFile(os.path.join(path_list,draft_pick_file))
         #complete_player_list = pd.read_excel(xls, skiprows =0, names = ['Pick','PLAYER','EligiblePosition'], index_col = 'Pick')
         player_list = injured_list.loc[injured_list.index.dropna().values]
         for irename in range(len(player_list)):
             # Standardize name
-            player_list.iloc[irename]['PLAYER'] = simplify_name(player_list.iloc[irename]['PLAYER'])
+            player_list.iloc[irename]['PLAYER'] = standardize_name(player_list.iloc[irename]['PLAYER'])
 
             # Find matching player
             idx_match = [i for i, x in enumerate(self.remaining_ranked_players['PLAYER'].str.match(player_list.PLAYER.iloc[irename])) if x]
 
-            pdb.set_trace()
             # Remove from self.remaining_ranked_players
-            self.remaining_ranked_players.drop([idx_match])
+            self.remaining_ranked_players = self.remaining_ranked_players.drop(index=idx_match)
 
-
-
-
-def simplify_name(name_in):
-    name_out = (((name_in.replace('ñ','n')).replace('í','i')).replace('é','e')).split(' Jr.')
+def standardize_name(name_in):
+    name_out = ((((name_in.replace('ñ','n')).replace('í','i')).replace('é','e')).replace('á','a')).split(' Jr.')
     return name_out[0]
