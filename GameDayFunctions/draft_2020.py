@@ -391,8 +391,8 @@ class Draft:
                 # Update Rosters with drafted_player, Loop otherwise
                 if position == 0:
                     unfilled_positions = [k for (k,v) in self.teams[team_key]['roster_spots'].items() if v > 0]
-                    if silent == False:
-                        print('Not Drafting '+eligible_positions+" "+drafted_player.PLAYER+' for '+ "/".join(unfilled_positions))
+                    #if silent == False:
+                    #    print('Not Drafting '+eligible_positions+" "+drafted_player.PLAYER+' for '+ "/".join(unfilled_positions))
                     idf += 1
                     if len(unfilled_positions) > 0:
                         pick_ok = False
@@ -400,7 +400,7 @@ class Draft:
                         pick_ok = True
                 else:
                     if silent == False:
-                        print('Team '+ str(team_key) +' Drafting '+drafted_player.iloc[0].PLAYER+' for '+position)
+                        print('Team '+ str(team_key+1) +' Drafting '+drafted_player.iloc[0].PLAYER+' for '+position)
                     df = df_copy
                     pick_ok = True
                     teams[team_key] = self.draft_into_teams(teams[team_key], drafted_player,position, silent = True)
