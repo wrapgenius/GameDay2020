@@ -3,7 +3,6 @@ import os
 import copy
 import numpy as np
 import pandas as pd
-#from . import standardize_name
 pd.options.mode.chained_assignment = None
 
 class Draft:
@@ -11,7 +10,7 @@ class Draft:
     def __init__(self, projections_object,
                  draft_position = 2,
                  number_teams = 12,
-                 roster_spots = {'C':1,'1B':1,'2B':1, '3B':1,'SS':1,'OF':3,'UTIL':1,'SP':2,'RP':2,'P':3,'BN':5},
+                 roster_spots = {'C':1,'1B':1,'2B':1, '3B':1,'SS':1,'OF':3,'UTIL':1,'SP':2,'RP':2,'P':3,'BN':1},
                  batter_stats  = ['AB','R','1B','2B', '3B','HR','RBI','SB','BB','AVG','OPS'],
                  pitcher_stats = ['IP','W', 'L','CG','SHO','SV','BB','SO','ERA','WHIP','BSV'],
                  filter_injured_players = True ):
@@ -19,6 +18,7 @@ class Draft:
         self.number_teams = number_teams
         self.number_rounds = sum(roster_spots.values())
         self.draft_position = draft_position - 1 # e.g., 1st pick is 0!
+        self.draft_number = 1
         self.player_projections = projections_object
         self.remaining_ranked_players = projections_object.all_rank
         self.roto_stats_batting = pd.DataFrame(columns =  batter_stats[1:])
@@ -179,13 +179,13 @@ class Draft:
             return 0
 
     # Do the entire draft one round at a time
-    def draft_all(self, naive_draft = False, silent = True):
+    def draft_all(self, naive_draft = False, shuffle_picks = False, silent = True):
         for iround in np.arange(self.number_rounds):
-            self.teams, self.remaining_ranked_players = self.draft_round(iround, self.teams, self.remaining_ranked_players, naive_draft = naive_draft, silent = silent)
+            self.teams, self.remaining_ranked_players = self.draft_round(iround, self.teams, self.remaining_ranked_players, naive_draft = naive_draft, shuffle_picks = shuffle_picks, silent = silent)
         self.roto_team_stats,self.roto_stats_batting,self.roto_stats_pitching,self.roto_standings,self.roto_placement,self.roto_team_stats_rank = self.tabulate_roto(self.teams)
 
     # Draft each round one team at a time.  When reaching "draft_position", stop and to pseudo_drafts to figure out best choice.
-    def draft_round(self, round_key, teams, df, naive_draft = False, silent = True):
+    def draft_round(self, round_key, teams, df, naive_draft = False, shuffle_picks = False, silent = True):
 
         # Reverse draft order every other round
         draft_order = np.arange(self.number_teams)
@@ -206,13 +206,13 @@ class Draft:
                     best_pick, best_position = self.find_best_pick(iteam, teams_copy, df_copy, round_key, silent = silent)
                     teams_copy, df_copy = self.draft_next_best(iteam, teams_copy, df_copy, force_pick = best_pick, force_position = best_position, silent = silent)
                 else:
-                    teams_copy, df_copy = self.draft_next_best(iteam, teams, df_copy, silent = silent)
+                    teams_copy, df_copy = self.draft_next_best(iteam, teams, df_copy, shuffle_picks = shuffle_picks, silent = silent)
             else:
-                teams_copy, df_copy = self.draft_next_best(iteam, teams_copy, df_copy, silent = silent)
+                teams_copy, df_copy = self.draft_next_best(iteam, teams_copy, df_copy, shuffle_picks = shuffle_picks, silent = silent)
 
         return teams_copy, df_copy
 
-    def draft_remaining(self, teams_copy, df_copy, draft_round):
+    def draft_remaining(self, teams_copy, df_copy, draft_round, shuffle_picks = False):
 
         # Draft all remaining players
         for iround in range(draft_round,self.number_rounds):
@@ -236,7 +236,7 @@ class Draft:
             # if starting_position < self.number_teams:
             if len(draft_order) > 0:
                 for iteam in draft_order:
-                    teams_copy, df_copy = self.draft_next_best(iteam, teams_copy, df_copy)
+                    teams_copy, df_copy = self.draft_next_best(iteam, teams_copy, df_copy, shuffle_picks = shuffle_picks)
 
         return teams_copy, df_copy
 
@@ -368,7 +368,7 @@ class Draft:
         #################################
 
     # Strategy is to take the best possible player, even if that means putting them in UTIL or BN (maybe BN should reconsidered...)
-    def draft_next_best(self, team_key, teams, df, force_pick = False, force_position = False, silent = True):
+    def draft_next_best(self, team_key, teams, df, force_pick = False, force_position = False, shuffle_picks = False, silent = True):
 
         if (force_pick == False):
             pick_ok = False
@@ -376,6 +376,35 @@ class Draft:
             while (pick_ok == False):
                 df_copy = copy.deepcopy(df)
                 pick_ok = True
+                prob_ok = True
+
+                # If shuffle_picks, have to decide whether to take next pick
+                if shuffle_picks == True:
+                    # Infer the overall pick number
+                    round_number = self.number_rounds - sum(teams[team_key]['roster_spots'].values())
+                    if round_number % 2 == 1:
+                        pick_number = (round_number * self.number_teams) + (self.number_teams - team_key)
+                    else:
+                        pick_number = (round_number * self.number_teams) + team_key
+
+                    # Use a sigmoid to get probability of drafting.  E.g.; if pick is usually taken
+                    # 5 and this is the 2nd pick, probability is low, but if is 15th pick, then
+                    # probability is near 1.
+                    # SQRT(1÷(1+EXP(−(pick_number−avg_pick_number)÷E2)))
+                    possible_pick = df_copy.iloc[idf:idf+1]
+                    if 'AVE' in possible_pick:
+                        sigmoid_probability = np.sqrt(1/(1+np.exp(-(pick_number-possible_pick['AVE'])/(possible_pick['STD']))))
+                    else:
+                        sigmoid_probability = np.sqrt(1/(1+np.exp(-(pick_number-possible_pick.index[0])/possible_pick.index[0])))
+                    uniform_random_number = np.random.uniform()
+
+                    # If the random number is above sigmoid_probability, don't take pick
+                    if uniform_random_number > sigmoid_probability.values[0]:
+                        #print(pick_number)
+                        #print(uniform_random_number)
+                        #print(sigmoid_probability.values[0])
+                        prob_ok = False
+
 
                 # Draft next in list.  Do this way (idf) so that if you don't take player, they are not removed for next picker
                 df_copy,drafted_player=df_copy.drop(df_copy.iloc[idf:idf+1].index),df_copy.iloc[idf:idf+1]
@@ -389,7 +418,10 @@ class Draft:
                 position = self.get_optimal_position(eligible_positions, teams[team_key]['roster_spots'])
 
                 # Update Rosters with drafted_player, Loop otherwise
-                if position == 0:
+                if prob_ok == False:
+                    idf += 1
+                    pick_ok = False
+                elif position == 0:
                     unfilled_positions = [k for (k,v) in self.teams[team_key]['roster_spots'].items() if v > 0]
                     #if silent == False:
                     #    print('Not Drafting '+eligible_positions+" "+drafted_player.PLAYER+' for '+ "/".join(unfilled_positions))
@@ -419,7 +451,7 @@ class Draft:
 
         return teams, df
 
-    def draft_from_list_and_find_best_pick(self,search_depth = 1, path_list = 'Draft_Pick_Spreadsheets/', draft_pick_file = 'TestPicks.xlsx', silent = False):
+    def draft_from_list_and_find_best_pick(self,search_depth = 1, path_list = 'Draft_Pick_Spreadsheets/', draft_pick_file = 'TestPicks.xlsx', shuffle_picks = False, silent = False):
         # Read in Excel Sheet and draft picks before moving on to finishing script
 
         xls = pd.ExcelFile(os.path.join(path_list,draft_pick_file))
@@ -462,7 +494,7 @@ class Draft:
         teams_copy, df_copy = self.draft_next_best(iteam+iter_team, teams_copy, df_copy, force_pick = best_pick, force_position = best_position)
 
         # Finish the draft and Rank
-        teams_copy, df_copy = self.draft_remaining(teams_copy, df_copy, iround)
+        teams_copy, df_copy = self.draft_remaining(teams_copy, df_copy, iround, shuffle_picks = shuffle_picks)
 
         # Calculate the best pseudo-standings
         roto_stats = self.tabulate_roto(teams_copy)

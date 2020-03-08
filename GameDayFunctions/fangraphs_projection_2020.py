@@ -2,7 +2,6 @@ import pdb
 import os
 import pandas as pd
 import numpy as np
-#from . import standardize_name
 pd.options.mode.chained_assignment = None
 
 class Projection:
@@ -50,15 +49,21 @@ class Projection:
         elif ranking_method == 'ESPN':
             ranking_file = 'ESPN_Roto_Ranking_Full_'+str(year)+'.xlsx'
         elif ranking_method == 'FantasyPros':
-            ranking_file = 'FantasyPros_Avg_Ranking_'+str(year)+'.xlsx'
+            ranking_file = 'FantasyPros_Avg_Std_'+str(year)+'.xlsx'
         #else:
         #    ranking_file = ranking_file
 
-        # Use Rotographs
+        # Use Rotographs as guide to populate stats - .xlsx seperate sheet for every position.
         rotographs_file = 'RotoGraphsPositionalRankings'+str(year)+'.xlsx'
         rls = pd.ExcelFile(os.path.join(path_data+str(year)+'/PositionalRankings/RotoGraphs/',rotographs_file))
+
+        # Use Rankings of choice; Yahoo, ESPN, FantasyPros
         xls = pd.ExcelFile(os.path.join(path_data+str(year)+'/PositionalRankings/'+ranking_method+'/',ranking_file))
-        self.all_rank = pd.read_excel(xls, skiprows = 0, names = ['Rank','PLAYER','EligiblePosition'], index_col = 'Rank')
+        if ranking_method == 'FantasyPros':
+            #pdb.set_trace()
+            self.all_rank = pd.read_excel(xls, skiprows = 0, names = ['Rank','PLAYER','EligiblePosition','AVE','STD'], index_col = 'Rank')
+        else:
+            self.all_rank = pd.read_excel(xls, skiprows = 0, names = ['Rank','PLAYER','EligiblePosition'], index_col = 'Rank')
         for irename in range(len(self.all_rank)):
             self.all_rank.iloc[irename]['PLAYER'] = standardize_name(self.all_rank.iloc[irename]['PLAYER'])
 
