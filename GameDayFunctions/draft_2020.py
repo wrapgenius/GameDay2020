@@ -245,7 +245,7 @@ class Draft:
 
         return teams_copy, df_copy
 
-    def find_best_pick(self, team_key, teams_copy, df_copy, round_key, search_depth = 1, autodraft_depth = 'end', silent = True):
+    def find_best_pick(self, team_key, teams_copy, df_copy, round_key, search_depth = 1, autodraft_depth = 'end', sigmoid_cut = 1e-6, silent = True):
         # find_best_pick returns iloc, the index (of df) of the optimal pick, and the position being filled
 
         # Determine which roster_spots are still unfilled
@@ -300,8 +300,7 @@ class Draft:
             iplayer = df_loop.iloc[iposition].PLAYER
 
             # Prevent picking someone you could easily get in later round
-            sigmoid_cut = 0.001 #0.005 #5e-7
-            pick_ok = self.sigmoid_probability_fn(iposition,teams_copy,team_key,df_copy, sigmoid_cut)
+            pick_ok, pick_number = self.sigmoid_probability_fn(iposition,teams_copy,team_key,df_copy, sigmoid_cut)
             #pdb.set_trace()
 
             # Draft looping through idx_eligible
@@ -333,11 +332,11 @@ class Draft:
                 player_based_drafted_teams[iplayer] = teams_loop[self.draft_position]['roster']
                 player_based_drafted_outcomes[iplayer] = [roto_stats[4],roto_stats[3][roto_stats[4]-1]]
                 if silent == False:
-                    print('Stored Result for Pick '+str(icounter)+' '+iplayer+' '+pos_eligible[icounter]+' whose placing/score is '+str(player_based_drafted_outcomes[iplayer]))
+                    print('Stored Result for Pick '+str(icounter)+' ['+str(pick_number)+'/'+str(drafted_player.index[0])+'] '+iplayer+' '+pos_eligible[icounter]+' whose placement/score is '+str(player_based_drafted_outcomes[iplayer]))
             else:
                 if silent == False:
                     #pdb.set_trace()
-                    print('Not Storing Result for Pick '+str(icounter)+' '+iplayer+' '+pos_eligible[icounter])
+                    print('Not Storing Result for Pick '+str(icounter)+' ['+str(pick_number)+'/'+str(drafted_player.index[0])+'] '+iplayer+' '+pos_eligible[icounter])
                     #print('Pick '+str(icounter)+' too low for this round '+iplayer+' '+pos_eligible[icounter]+' whose placing/score is '+str(player_based_drafted_outcomes[iplayer]))
 
         # End of Loop
@@ -584,7 +583,7 @@ class Draft:
             pick_ok = False
 
         #pdb.set_trace()
-        return pick_ok
+        return pick_ok, pick_number
 
 def standardize_name(name_in):
     name_out = ((((name_in.replace('ñ','n')).replace('í','i')).replace('é','e')).replace('á','a')).split(' Jr.')
