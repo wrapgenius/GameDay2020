@@ -212,10 +212,15 @@ class Draft:
 
         return teams_copy, df_copy
 
-    def draft_remaining(self, teams_copy, df_copy, draft_round, shuffle_picks = False):
+    def draft_remaining(self, teams_copy, df_copy, draft_round,  autodraft_depth = 'end', shuffle_picks = False):
 
+        if autodraft_depth == 'end':
+            remaining_rounds = range(draft_round,self.number_rounds)
+        else:
+            pdb.set_trace()
+            remaining_rounds = range(draft_round,min(self.number_rounds, draft_round + autodraft_depth + 1))
         # Draft all remaining players
-        for iround in range(draft_round,self.number_rounds):
+        for iround in remaining_rounds:
 
             draft_order = np.arange(self.number_teams)
 
@@ -240,7 +245,7 @@ class Draft:
 
         return teams_copy, df_copy
 
-    def find_best_pick(self, team_key, teams_copy, df_copy, round_key, search_depth = 1, silent = True):
+    def find_best_pick(self, team_key, teams_copy, df_copy, round_key, search_depth = 1, autodraft_depth = 'end', silent = True):
         # find_best_pick returns iloc, the index (of df) of the optimal pick, and the position being filled
 
         # Determine which roster_spots are still unfilled
@@ -284,7 +289,8 @@ class Draft:
         player_based_drafted_teams = {}
 
         # Loop over eligible players, then finish the draft
-        for iposition, icounter in zip(idx_eligible, range(len(idx_eligible))):
+        n_eligible_positions = len(idx_eligible)
+        for iposition, icounter in zip(idx_eligible, range(n_eligible_positions)):
 
             # make a copy of teams to finish drafting
             teams_loop = copy.deepcopy(teams_copy)
@@ -293,24 +299,46 @@ class Draft:
             # Get iplayer before dropping
             iplayer = df_loop.iloc[iposition].PLAYER
 
+            # Prevent picking someone you could easily get in later round
+            sigmoid_cut = 0.001 #0.005 #5e-7
+            pick_ok = self.sigmoid_probability_fn(iposition,teams_copy,team_key,df_copy, sigmoid_cut)
+            #pdb.set_trace()
+
             # Draft looping through idx_eligible
             df_loop,drafted_player=df_loop.drop(df_loop.iloc[iposition:iposition+1].index),df_loop.iloc[iposition:iposition+1]
             position = pos_eligible[icounter]
 
+            #if position == 'BN':
+            #    if 'P' in drafted_player.EligiblePosition.values[0]:
+            #        if drafted_player.EligiblePosition.values[0] == 'SP':
+            #            if ('SP' in pos_eligible): position = 'SP'
+            #        elif drafted_player.EligiblePosition.values[0] == 'SP':
+            #            if ('RP' in pos_eligible): position = 'RP'
+            #        else:
+            #            if ('P' in pos_eligible): position = 'P'
+            #    print('swapped BN with '+position+ ' for '+drafted_player.PLAYER.values[0])
+
             teams_loop[team_key] = self.draft_into_teams(teams_loop[team_key], drafted_player, position, silent = True)
 
             # LOOP OVER WHOLE REST OF THE DRAFT HERE...
-            teams_loop, df_loop = self.draft_remaining(teams_loop, df_loop, round_key)
+            teams_loop, df_loop = self.draft_remaining(teams_loop, df_loop, round_key, autodraft_depth = autodraft_depth)
 
             # Calculate the best pseudo-standings
             #pseudo_team_stats, pseudo_batting_stats, pseudo_pitching_stats, pseudo_standings, pseudo_placement = self.tabulate_roto(teams_loop)
             roto_stats = self.tabulate_roto(teams_loop)
 
             # Store the result.
-            player_based_drafted_teams[iplayer] = teams_loop[self.draft_position]['roster']
-            player_based_drafted_outcomes[iplayer] = [roto_stats[4],roto_stats[3][roto_stats[4]-1]]
-            if silent == False:
-                print('Stored Result for Pick '+str(icounter)+' '+iplayer+' '+pos_eligible[icounter]+' whose placing/score is '+str(player_based_drafted_outcomes[iplayer]))
+            #if (pick_ok == True) or (icounter == n_eligible_positions-1):
+            if (pick_ok == True) or (n_eligible_positions < 2):
+                player_based_drafted_teams[iplayer] = teams_loop[self.draft_position]['roster']
+                player_based_drafted_outcomes[iplayer] = [roto_stats[4],roto_stats[3][roto_stats[4]-1]]
+                if silent == False:
+                    print('Stored Result for Pick '+str(icounter)+' '+iplayer+' '+pos_eligible[icounter]+' whose placing/score is '+str(player_based_drafted_outcomes[iplayer]))
+            else:
+                if silent == False:
+                    #pdb.set_trace()
+                    print('Not Storing Result for Pick '+str(icounter)+' '+iplayer+' '+pos_eligible[icounter])
+                    #print('Pick '+str(icounter)+' too low for this round '+iplayer+' '+pos_eligible[icounter]+' whose placing/score is '+str(player_based_drafted_outcomes[iplayer]))
 
         # End of Loop
         ranked_positions = ['C','2B','SS','OF','3B','1B','SP','RP','UTIL','P','BN']
@@ -322,6 +350,7 @@ class Draft:
 
         # If there is a tie for top relative_ranking, select by highest score, then optimal position
         n_max_ranking = sum(relative_ranking == np.min(relative_ranking))
+        #pdb.set_trace()
         if n_max_ranking == 1:
             best_player = df_copy.iloc[idx_eligible[relative_ranking_rank[0]]:idx_eligible[relative_ranking_rank[0]]+1]
             best_pick_plus_one = idx_eligible[relative_ranking_rank[0]] + 1 # Avoid best_pick = 0
@@ -351,7 +380,7 @@ class Draft:
                         break
 
         # Need to not fill UTIL if other opening exist...
-        if (best_position == 'UTIL'):
+        if (best_position == 'UTIL') or (best_position == 'BN'):
             alternative_positions = unfilled_positions
             player_positions = best_player.EligiblePosition.values[0].split('/')
             if any('P' in s for s in alternative_positions):
@@ -377,15 +406,16 @@ class Draft:
                 df_copy = copy.deepcopy(df)
                 pick_ok = True
                 prob_ok = True
+                unfilled_positions = [k for (k,v) in self.teams[team_key]['roster_spots'].items() if v > 0]
 
                 # If shuffle_picks, have to decide whether to take next pick
                 if shuffle_picks == True:
                     # Infer the overall pick number
                     round_number = self.number_rounds - sum(teams[team_key]['roster_spots'].values())
                     if round_number % 2 == 1:
-                        pick_number = (round_number * self.number_teams) + (self.number_teams - team_key)
+                        pick_number = 1+(round_number * self.number_teams) + (self.number_teams - team_key)
                     else:
-                        pick_number = (round_number * self.number_teams) + team_key
+                        pick_number = 1+(round_number * self.number_teams) + team_key
 
                     # Use a sigmoid to get probability of drafting.  E.g.; if pick is usually taken
                     # 5 and this is the 2nd pick, probability is low, but if is 15th pick, then
@@ -393,18 +423,20 @@ class Draft:
                     # SQRT(1÷(1+EXP(−(pick_number−avg_pick_number)÷E2)))
                     possible_pick = df_copy.iloc[idf:idf+1]
                     if 'AVE' in possible_pick:
-                        sigmoid_probability = np.sqrt(1/(1+np.exp(-(pick_number-possible_pick['AVE'])/(possible_pick['STD']))))
+                        sigmoid_probability = np.sqrt(1/(1+np.exp(-(pick_number-possible_pick['AVE']))))
+                        #sigmoid_probability = np.sqrt(1/(1+np.exp(-(pick_number-possible_pick['AVE'])/(possible_pick['STD']))))
+                        sigmoid_probability = sigmoid_probability.values[0]
                     else:
-                        sigmoid_probability = np.sqrt(1/(1+np.exp(-(pick_number-possible_pick.index[0])/possible_pick.index[0])))
+                        sigmoid_probability = np.sqrt(1/(1+np.exp(-(pick_number-possible_pick.index[0]))))
+                        #pdb.set_trace()
                     uniform_random_number = np.random.uniform()
 
                     # If the random number is above sigmoid_probability, don't take pick
-                    if uniform_random_number > sigmoid_probability.values[0]:
+                    if (uniform_random_number > sigmoid_probability) and (sigmoid_probability > 0.5) and (len(unfilled_positions) > 2):
                         #print(pick_number)
                         #print(uniform_random_number)
                         #print(sigmoid_probability.values[0])
                         prob_ok = False
-
 
                 # Draft next in list.  Do this way (idf) so that if you don't take player, they are not removed for next picker
                 df_copy,drafted_player=df_copy.drop(df_copy.iloc[idf:idf+1].index),df_copy.iloc[idf:idf+1]
@@ -422,7 +454,7 @@ class Draft:
                     idf += 1
                     pick_ok = False
                 elif position == 0:
-                    unfilled_positions = [k for (k,v) in self.teams[team_key]['roster_spots'].items() if v > 0]
+                    #unfilled_positions = [k for (k,v) in self.teams[team_key]['roster_spots'].items() if v > 0]
                     #if silent == False:
                     #    print('Not Drafting '+eligible_positions+" "+drafted_player.PLAYER+' for '+ "/".join(unfilled_positions))
                     idf += 1
@@ -451,7 +483,7 @@ class Draft:
 
         return teams, df
 
-    def draft_from_list_and_find_best_pick(self,search_depth = 1, path_list = 'Draft_Pick_Spreadsheets/', draft_pick_file = 'TestPicks.xlsx', shuffle_picks = False, silent = False):
+    def draft_from_list_and_find_best_pick(self, search_depth = 1, autodraft_depth = 'end', path_list = 'Draft_Pick_Spreadsheets/', draft_pick_file = 'TestPicks.xlsx', shuffle_picks = False, silent = False):
         # Read in Excel Sheet and draft picks before moving on to finishing script
 
         xls = pd.ExcelFile(os.path.join(path_list,draft_pick_file))
@@ -489,12 +521,12 @@ class Draft:
         # Find best pick
         if silent == False:
             print('Finding Best Pick For Team '+str(iteam+1+iter_team))
-        best_pick, best_position = self.find_best_pick(iteam+iter_team,copy.deepcopy(teams_copy),copy.deepcopy(df_copy),iround,silent=False,search_depth = 1)
+        best_pick, best_position = self.find_best_pick(iteam+iter_team,copy.deepcopy(teams_copy),copy.deepcopy(df_copy),iround,silent=False,autodraft_depth = autodraft_depth,search_depth = 1)
         best_player_this_round = df_copy.iloc[best_pick-1].PLAYER
         teams_copy, df_copy = self.draft_next_best(iteam+iter_team, teams_copy, df_copy, force_pick = best_pick, force_position = best_position)
 
         # Finish the draft and Rank
-        teams_copy, df_copy = self.draft_remaining(teams_copy, df_copy, iround, shuffle_picks = shuffle_picks)
+        teams_copy, df_copy = self.draft_remaining(teams_copy, df_copy, iround, autodraft_depth = autodraft_depth, shuffle_picks = shuffle_picks)
 
         # Calculate the best pseudo-standings
         roto_stats = self.tabulate_roto(teams_copy)
@@ -522,6 +554,37 @@ class Draft:
 
             # Remove from self.remaining_ranked_players
             self.remaining_ranked_players = self.remaining_ranked_players.drop(index=idx_match)
+
+    def sigmoid_probability_fn(self,iposition,teams_in,team_key_in,df_in,cutoff):
+        pick_ok = True
+        round_number = self.number_rounds - sum(teams_in[team_key_in]['roster_spots'].values())
+        if round_number % 2 == 1:
+            pick_number = 1+(round_number * self.number_teams) + (self.number_teams - team_key_in)
+        else:
+            pick_number = 1+(round_number * self.number_teams) + team_key_in
+
+        # Use a sigmoid to get probability of drafting.  E.g.; if pick is usually taken
+        # 5 and this is the 2nd pick, probability is low, but if is 15th pick, then
+        # probability is near 1.
+        # 1÷(1+EXP(−(pick_number−avg_pick_number)))
+        possible_pick = df_in.iloc[iposition:iposition+1]
+        if 'AVE' in possible_pick:
+            sigmoid_probability = (1/(1+np.exp(-(pick_number-possible_pick['AVE'])/np.sqrt(pick_number))))
+            sigmoid_probability = sigmoid_probability.values[0]
+        else:
+            sigmoid_probability = (1/(1+np.exp(-(pick_number-possible_pick.index[0])/np.sqrt(pick_number))))
+
+        #print(pick_number)
+        #print(possible_pick)
+        #print(sigmoid_probability)
+
+        if sigmoid_probability < cutoff:
+            #print(pick_number)
+            #print(possible_pick)
+            pick_ok = False
+
+        #pdb.set_trace()
+        return pick_ok
 
 def standardize_name(name_in):
     name_out = ((((name_in.replace('ñ','n')).replace('í','i')).replace('é','e')).replace('á','a')).split(' Jr.')
