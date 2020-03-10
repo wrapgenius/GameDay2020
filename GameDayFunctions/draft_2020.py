@@ -13,7 +13,8 @@ class Draft:
                  roster_spots = {'C':1,'1B':1,'2B':1, '3B':1,'SS':1,'OF':3,'UTIL':1,'SP':2,'RP':2,'P':3,'BN':1},
                  batter_stats  = ['AB','R','1B','2B', '3B','HR','RBI','SB','BB','AVG','OPS'],
                  pitcher_stats = ['IP','W', 'L','CG','SHO','SV','BB','SO','ERA','WHIP','BSV'],
-                 filter_injured_players = True ):
+                 filter_injured_players = True,
+                 sigmoid_cut = 1e-6):
 
         self.number_teams = number_teams
         self.number_rounds = sum(roster_spots.values())
@@ -23,6 +24,7 @@ class Draft:
         self.remaining_ranked_players = projections_object.all_rank
         self.roto_stats_batting = pd.DataFrame(columns =  batter_stats[1:])
         self.roto_stats_pitching = pd.DataFrame(columns =  pitcher_stats[1:])
+        self.sigmoid_cut = sigmoid_cut
         self.teams = {}
         # Eventually make this smarter, e.g.;
         # self.roster_spots{"fielders":{'C':1,'1B':1,'2B':1, '3B':1,'SS':1,'OF':3,'UTIL':1},
@@ -245,7 +247,7 @@ class Draft:
 
         return teams_copy, df_copy
 
-    def find_best_pick(self, team_key, teams_copy, df_copy, round_key, search_depth = 1, autodraft_depth = 'end', sigmoid_cut = 1e-6, silent = True):
+    def find_best_pick(self, team_key, teams_copy, df_copy, round_key, search_depth = 1, autodraft_depth = 'end', silent = True):
         # find_best_pick returns iloc, the index (of df) of the optimal pick, and the position being filled
 
         # Determine which roster_spots are still unfilled
@@ -300,7 +302,7 @@ class Draft:
             iplayer = df_loop.iloc[iposition].PLAYER
 
             # Prevent picking someone you could easily get in later round
-            pick_ok, pick_number = self.sigmoid_probability_fn(iposition,teams_copy,team_key,df_copy, sigmoid_cut)
+            pick_ok, pick_number = self.sigmoid_probability_fn(iposition,teams_copy,team_key,df_copy)
             #pdb.set_trace()
 
             # Draft looping through idx_eligible
@@ -554,7 +556,7 @@ class Draft:
             # Remove from self.remaining_ranked_players
             self.remaining_ranked_players = self.remaining_ranked_players.drop(index=idx_match)
 
-    def sigmoid_probability_fn(self,iposition,teams_in,team_key_in,df_in,cutoff):
+    def sigmoid_probability_fn(self,iposition,teams_in,team_key_in,df_in):
         pick_ok = True
         round_number = self.number_rounds - sum(teams_in[team_key_in]['roster_spots'].values())
         if round_number % 2 == 1:
@@ -577,7 +579,7 @@ class Draft:
         #print(possible_pick)
         #print(sigmoid_probability)
 
-        if sigmoid_probability < cutoff:
+        if sigmoid_probability < self.sigmoid_cut:
             #print(pick_number)
             #print(possible_pick)
             pick_ok = False
