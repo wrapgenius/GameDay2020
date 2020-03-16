@@ -20,6 +20,7 @@ class Draft:
         self.number_rounds = sum(roster_spots.values())
         self.draft_position = draft_position - 1 # e.g., 1st pick is 0!
         self.draft_number = 1
+        self.drafted_team = {}
         self.player_projections = projections_object
         self.remaining_ranked_players = projections_object.all_rank
         self.roto_stats_batting = pd.DataFrame(columns =  batter_stats[1:])
@@ -199,7 +200,8 @@ class Draft:
 
                 # When team is draft_position, search for best pick.
                 if iteam == self.draft_position:
-                    best_pick, best_position = self.find_best_pick(iteam, teams_copy, df_copy, round_key, silent = silent)
+                    best_pick, best_position, best_placement, best_score = self.find_best_pick(iteam, teams_copy, df_copy, round_key, silent = silent)
+                    self.drafted_team[round_key] = df_copy.index[best_pick-1], df_copy.iloc[best_pick-1]['PLAYER'], best_position, best_placement, best_score
                     teams_copy, df_copy = self.draft_next_best(iteam, teams_copy, df_copy, force_pick = best_pick, force_position = best_position, silent = silent)
                 else:
                     teams_copy, df_copy = self.draft_next_best(iteam, teams_copy, df_copy, shuffle_picks = shuffle_picks, silent = silent)
@@ -292,8 +294,8 @@ class Draft:
                     print('Not Storing Result for Pick '+str(icounter)+' ['+str(pick_number)+'/'+str(drafted_player.index[0])+'] '+iplayer+' '+pos_eligible[icounter])
 
         # Pick best of the bunch
-        best_pick_plus_one, best_position = self.decide_best_choice(df_copy, player_based_drafted_teams, player_based_drafted_outcomes,unfilled_positions, idx_eligible, pos_eligible)
-        return best_pick_plus_one, best_position
+        best_pick_plus_one, best_position, best_player, best_placement, best_score = self.decide_best_choice(df_copy, player_based_drafted_teams, player_based_drafted_outcomes,unfilled_positions, idx_eligible, pos_eligible, silent=silent)
+        return best_pick_plus_one, best_position, best_placement, best_score
         # END OF LOOP TO FIND BEST PLAYER
         #################################
 
@@ -327,7 +329,7 @@ class Draft:
 
         return idx_eligible, pos_eligible
 
-    def decide_best_choice(self, df_copy, player_based_drafted_teams, player_based_drafted_outcomes, unfilled_positions, idx_eligible, pos_eligible, rank_type = 'placement'):
+    def decide_best_choice(self, df_copy, player_based_drafted_teams, player_based_drafted_outcomes, unfilled_positions, idx_eligible, pos_eligible, rank_type = 'placement', silent = True):
         # End of Loop
         ranked_positions = ['C','1B','2B','OF','SS','3B','SP','RP','UTIL','P','BN']
 
@@ -342,12 +344,15 @@ class Draft:
             best_player = df_copy.iloc[idx_eligible[relative_ranking_rank[0]]:idx_eligible[relative_ranking_rank[0]]+1]
             best_pick_plus_one = idx_eligible[relative_ranking_rank[0]] + 1 # Avoid best_pick = 0
             best_position = pos_eligible[relative_ranking_rank[0]]
+            best_placement = relative_ranking[relative_ranking_rank[0]]
+            best_score = relative_scores[relative_ranking_rank[0]]
         else:
             # Of those tied for top rank, figure out had a highest score
             best_player_scores = [relative_scores[relative_ranking_rank[i]] for i in range(n_max_ranking)]
             best_players = [df_copy.iloc[idx_eligible[relative_ranking_rank[i]]] for i in range(n_max_ranking)]
             best_picks_plus_one = [idx_eligible[relative_ranking_rank[i]] + 1 for i in range(n_max_ranking)]
             best_player_positions = [pos_eligible[relative_ranking_rank[i]] for i in range(n_max_ranking)]
+            best_player_placements = [relative_ranking[relative_ranking_rank[i]] for i in range(n_max_ranking)]
             idx_best_player_scores = np.argsort(best_player_scores)[::-1]
 
             # If still tied, take the optimal position (i.e., SS over OF)
@@ -356,6 +361,8 @@ class Draft:
                 best_player = df_copy.iloc[best_picks_plus_one[idx_best_player_scores[0]]-1:best_picks_plus_one[idx_best_player_scores[0]]-1+1]
                 best_pick_plus_one = best_picks_plus_one[idx_best_player_scores[0]]
                 best_position = best_player_positions[idx_best_player_scores[0]]
+                best_placement = best_player_placements[idx_best_player_scores[0]]
+                best_score = best_player_scores[idx_best_player_scores[0]]
             else:
                 best_player_positions = [pos_eligible[idx_best_player_scores[i]] for i in range(n_max_scores)]
                 for irank in range(len(ranked_positions)):
@@ -364,6 +371,8 @@ class Draft:
                         best_player = df_copy.iloc[best_picks_plus_one[idx_best_player_scores[idx_best]]-1:best_picks_plus_one[idx_best_player_scores[idx_best]]-1+1]
                         best_pick_plus_one = best_picks_plus_one[idx_best_player_scores[idx_best]]
                         best_position = ranked_positions[irank]
+                        best_placement = best_player_placements[idx_best_player_scores[idx_best]]
+                        best_score = best_player_scores[idx_best_player_scores[idx_best]]
                         break
 
         # Need to not fill UTIL if other opening exist...
@@ -377,9 +386,10 @@ class Draft:
             for altp in player_positions:
                 if any(altp in s for s in alternative_positions):
                     best_position = altp
-                    print('Swapping UTIL with '+ best_position)
+                    if silent == False:
+                        print('Swapping UTIL with '+ best_position)
 
-        return best_pick_plus_one, best_position
+        return best_pick_plus_one, best_position, best_player, best_placement, best_score
 
     # Strategy is to take the best possible player, even if that means putting them in UTIL or BN (maybe BN should reconsidered...)
     def draft_next_best(self, team_key, teams, df, force_pick = False, force_position = False, shuffle_picks = False, silent = True):
@@ -446,8 +456,8 @@ class Draft:
             position = force_position
 
             teams[team_key] = self.draft_into_teams(teams[team_key], drafted_player, position, silent = True)
-            #if silent == False:
-            print('Team '+ str(team_key+1) +' picking '+drafted_player.iloc[0].PLAYER+' for '+position)
+            if silent == False:
+                print('Team '+ str(team_key+1) +' picking '+drafted_player.iloc[0].PLAYER+' for '+position)
 
         return teams, df
 
@@ -486,7 +496,7 @@ class Draft:
         # Find best pick
         if silent == False:
             print('Finding Best Pick For Team '+str(iteam+1+iter_team))
-        best_pick, best_position = self.find_best_pick(iteam+iter_team,copy.deepcopy(teams_copy),copy.deepcopy(df_copy),iround,silent=False,autodraft_depth = autodraft_depth,search_depth = 1)
+        best_pick, best_position, best_placement, best_score = self.find_best_pick(iteam+iter_team,copy.deepcopy(teams_copy),copy.deepcopy(df_copy),iround,silent=False,autodraft_depth = autodraft_depth,search_depth = 1)
         best_player_this_round = df_copy.iloc[best_pick-1].PLAYER
         teams_copy, df_copy = self.draft_next_best(iteam+iter_team, teams_copy, df_copy, force_pick = best_pick, force_position = best_position)
 
