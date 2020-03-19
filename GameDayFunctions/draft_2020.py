@@ -299,7 +299,49 @@ class Draft:
         # END OF LOOP TO FIND BEST PLAYER
         #################################
 
-    def idx_unfilled_positions(self,df_copy, unfilled_positions):
+    def idx_unfilled_positions(self,df_copy, unfilled_positions0):
+        idx_eligible = []
+        pos_eligible = []
+
+        # First check for 'BN' in unfilled_positions0, if yes unfilled_positions is all positions
+        if 'BN' in unfilled_positions0:
+            unfilled_positions = self.fielders+self.pitchers
+        elif 'UTIL' in unfilled_positions0:
+            unfilled_positions = self.fielders
+        elif 'P' in unfilled_positions0:
+            unfilled_positions = self.pitchers
+        else:
+            unfilled_positions = unfilled_positions0
+        #pdb.set_trace()
+        #print('Choosing from' , unfilled_positions)
+
+        # Find index of best player at each remaining position
+        for iunfilled in unfilled_positions:
+            if iunfilled == 'UTIL':
+                idx_position = [i for i, val in enumerate(df_copy.EligiblePosition.str.contains('|'.join(self.fielders))) if val]
+            elif iunfilled == 'P':
+                idx_position = [i for i, val in enumerate(df_copy.EligiblePosition.str.contains('|'.join(self.pitchers))) if val]
+            elif iunfilled == 'BN':
+                idx_position = [i for i, val in enumerate(df_copy.EligiblePosition.str.contains('|'.join(self.fielders+self.pitchers))) if val]
+            else:
+                idx_position = [i for i, val in enumerate(df_copy.EligiblePosition.str.contains(iunfilled)) if val]
+            filled = False
+            jdx = 0
+            while filled == False:
+                if idx_position[jdx] in idx_eligible:
+                    jdx+=1
+                else:
+                    idx_eligible.append(idx_position[jdx])
+                    pos_eligible.append(iunfilled)
+                    filled = True
+
+        # Get rid of doubles (1B and OF is particularly prone)
+        idx_eligible, idx_unique = np.unique(idx_eligible, return_index = True)
+        pos_eligible = [pos_eligible[i] for i in idx_unique]
+
+        return idx_eligible, pos_eligible
+
+    def idx_unfilled_positions_only(self,df_copy, unfilled_positions):
         idx_eligible = []
         pos_eligible = []
 
