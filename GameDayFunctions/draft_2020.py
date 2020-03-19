@@ -14,7 +14,7 @@ class Draft:
                  batter_stats  = ['AB','R','1B','2B', '3B','HR','RBI','SB','BB','AVG','OPS'],
                  pitcher_stats = ['IP','W', 'L','CG','SHO','SV','BB','SO','ERA','WHIP','BSV'],
                  filter_injured_players = True,
-                 sigmoid_cut = 1e-7):
+                 sigmoid_cut = 1e-8):
 
         self.number_teams = number_teams
         self.number_rounds = sum(roster_spots.values())
