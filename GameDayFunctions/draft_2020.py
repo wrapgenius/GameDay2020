@@ -553,7 +553,7 @@ class Draft:
         # Return Player Name and Projected Roto Stats
         return best_player_this_round, roto_stats
 
-    def filter_injured_list(self, path_list = os.environ['BBPATH']+"GameDay2020/Injured_List_Spreadsheets", injured_list_file = 'Injuries2020.xlsx'):
+    def filter_injured_list(self, path_list = "Injured_List_Spreadsheets/", injured_list_file = 'Injuries2020.xlsx'):
         # Read in Excel Sheet of Players to Exclude.  Should this be moved to Projection?  Yes.
 
         xls = pd.ExcelFile(os.path.join(path_list,injured_list_file))
