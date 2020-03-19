@@ -288,7 +288,7 @@ class Draft:
                 player_based_drafted_teams[iplayer] = teams_loop[self.draft_position]['roster']
                 player_based_drafted_outcomes[iplayer] = [roto_stats[4],roto_stats[3][roto_stats[4]-1]]
                 if silent == False:
-                    print('Stored Result for Pick '+str(icounter)+' ['+str(pick_number)+'/'+str(drafted_player.index[0])+'] '+iplayer+' '+pos_eligible[icounter]+' whose placement/score is '+str(player_based_drafted_outcomes[iplayer]))
+                    print('Stored Result for Pick '+str(icounter)+' ['+str(pick_number)+'/'+str(drafted_player.index[0])+'] '+iplayer+' '+pos_eligible[icounter]+' whose placement/score is '+str(roto_stats[3][self.draft_position])) #str(player_based_drafted_outcomes[iplayer]))
             else:
                 if silent == False:
                     print('Not Storing Result for Pick '+str(icounter)+' ['+str(pick_number)+'/'+str(drafted_player.index[0])+'] '+iplayer+' '+pos_eligible[icounter])
