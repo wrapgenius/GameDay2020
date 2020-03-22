@@ -98,9 +98,6 @@ class Draft:
             eligible_positions = drafted_player.EligiblePosition.values[0]
             position = self.get_optimal_position(eligible_positions, single_team['roster_spots'])
 
-        if silent == False:
-            print('Picked '+drafted_player.iloc[0].PLAYER+' for '+position)
-
         # Different Stats Entries for Pitchers and Batters
         if drafted_player.EligiblePosition.str.contains('P').bool() == True:
             idx_player = self.player_projections.pitchers_stats.Name.values == drafted_player.iloc[0].PLAYER
@@ -113,13 +110,29 @@ class Draft:
             single_team['batting_stats'] = single_team['batting_stats'].append(statline[0:1])
 
         # Subtract position spot from roster_spots
-        single_team['roster_spots'][position] -= 1
+        if single_team['roster_spots'][position] > 0:
+            single_team['roster_spots'][position] -= 1
+            recorded_position = position
+        elif (drafted_player.EligiblePosition.str.contains('P').bool() == True) and (single_team['roster_spots']['P'] > 0):
+            single_team['roster_spots']['P'] -= 1
+            recorded_position = 'P'
+        elif (drafted_player.EligiblePosition.str.contains('P').bool() == False) and (single_team['roster_spots']['UTIL'] > 0):
+            single_team['roster_spots']['UTIL'] -= 1
+            recorded_position = 'UTIL'
+        elif (single_team['roster_spots']['BN'] > 0):
+            single_team['roster_spots']['BN'] -= 1
+            recorded_position = 'BN'
+        else:
+            pdb.set_trace()
+
+        if silent == False:
+            print('Picked '+ drafted_player.iloc[0].PLAYER + '('+ drafted_player.iloc[0].EligiblePosition +')' +' for ' + recorded_position)
 
         # Add Player to single_team Roster
-        if position in single_team['roster']:
-            single_team['roster'][position] = [single_team['roster'][position], drafted_player.PLAYER.values[0:1]]
+        if recorded_position in single_team['roster']:
+            single_team['roster'][recorded_position] = [single_team['roster'][recorded_position], drafted_player.PLAYER.values[0:1]]
         else:
-            single_team['roster'][position] = drafted_player.PLAYER.values[0:1]
+            single_team['roster'][recorded_position] = drafted_player.PLAYER.values[0:1]
 
         return single_team
 
@@ -180,13 +193,13 @@ class Draft:
             return 0
 
     # Do the entire draft one round at a time
-    def draft_all(self, naive_draft = False, shuffle_picks = False, silent = True):
+    def draft_all(self, naive_draft = False, search_depth = 1, shuffle_picks = False, silent = True):
         for iround in np.arange(self.number_rounds):
-            self.teams, self.remaining_ranked_players = self.draft_round(iround, self.teams, self.remaining_ranked_players, naive_draft = naive_draft, shuffle_picks = shuffle_picks, silent = silent)
+            self.teams, self.remaining_ranked_players = self.draft_round(iround, self.teams, self.remaining_ranked_players, naive_draft = naive_draft, shuffle_picks = shuffle_picks, search_depth = search_depth,  silent = silent)
         self.roto_team_stats,self.roto_stats_batting,self.roto_stats_pitching,self.roto_standings,self.roto_placement,self.roto_team_stats_rank = self.tabulate_roto(self.teams)
 
     # Draft each round one team at a time.  When reaching "draft_position", stop and to pseudo_drafts to figure out best choice.
-    def draft_round(self, round_key, teams, df, naive_draft = False, shuffle_picks = False, silent = True):
+    def draft_round(self, round_key, teams, df, naive_draft = False, shuffle_picks = False, search_depth = 1, silent = True):
 
         # Reverse draft order every other round
         draft_order = np.arange(self.number_teams)
@@ -205,7 +218,7 @@ class Draft:
 
                 # When team is draft_position, search for best pick.
                 if iteam == self.draft_position:
-                    best_pick, best_position, best_placement, best_score = self.find_best_pick(iteam, teams_copy, df_copy, round_key, silent = silent)
+                    best_pick, best_position, best_placement, best_score = self.find_best_pick(iteam, teams_copy, df_copy, round_key, silent = silent, search_depth = search_depth)
                     self.drafted_team[round_key] = df_copy.index[best_pick-1], df_copy.iloc[best_pick-1]['PLAYER'], best_position, best_placement, best_score
                     teams_copy, df_copy = self.draft_next_best(iteam, teams_copy, df_copy, force_pick = best_pick, force_position = best_position, silent = silent)
                 else:
@@ -354,36 +367,6 @@ class Draft:
         idx_eligible, idx_unique = np.unique(idx_eligible, return_index = True)
         pos_eligible = [pos_eligible[i] for i in idx_unique]
         #pdb.set_trace()
-        return idx_eligible, pos_eligible
-
-    def idx_unfilled_positions_only(self,df_copy, unfilled_positions):
-        idx_eligible = []
-        pos_eligible = []
-
-        # Find index of best player at each remaining position
-        for iunfilled in unfilled_positions:
-            if iunfilled == 'UTIL':
-                idx_position = [i for i, val in enumerate(df_copy.EligiblePosition.str.contains('|'.join(self.fielders))) if val]
-            elif iunfilled == 'P':
-                idx_position = [i for i, val in enumerate(df_copy.EligiblePosition.str.contains('|'.join(self.pitchers))) if val]
-            elif iunfilled == 'BN':
-                idx_position = [i for i, val in enumerate(df_copy.EligiblePosition.str.contains('|'.join(self.fielders+self.pitchers))) if val]
-            else:
-                idx_position = [i for i, val in enumerate(df_copy.EligiblePosition.str.contains(iunfilled)) if val]
-            filled = False
-            jdx = 0
-            while filled == False:
-                if idx_position[jdx] in idx_eligible:
-                    jdx+=1
-                else:
-                    idx_eligible.append(idx_position[jdx])
-                    pos_eligible.append(iunfilled)
-                    filled = True
-
-        # Get rid of doubles (1B and OF is particularly prone)
-        idx_eligible, idx_unique = np.unique(idx_eligible, return_index = True)
-        pos_eligible = [pos_eligible[i] for i in idx_unique]
-
         return idx_eligible, pos_eligible
 
     def decide_best_choice(self, df_copy, player_based_drafted_teams, player_based_drafted_outcomes, unfilled_positions, idx_eligible, pos_eligible, rank_type = 'placement', silent = True):

@@ -22,6 +22,7 @@ class Simulation:
                  year = 2020,
                  number_teams = 12,
                  number_sims = 50,
+                 shuffle_picks = True,
                  path_sims = 'simulations/',
                  roster_spots = {'C':1,'1B':1,'2B':1, '3B':1,'SS':1,'OF':3,'UTIL':1,'SP':2,'RP':2,'P':3,'BN':1},
                  batter_stats  = ['AB','R','1B','2B', '3B','HR','RBI','SB','BB','AVG','OPS'],
@@ -37,11 +38,8 @@ class Simulation:
         self.number_sims = number_sims
         self.path_sims = path_sims
         self.roster_spots = roster_spots
-        self.batter_stats = batter_stats #pd.DataFrame(columns =  batter_stats[1:])
-        self.pitcher_stats = pitcher_stats # pd.DataFrame(columns =  pitcher_stats[1:])
-        #self.fielders = ['C','1B','2B','3B','SS','OF','UTIL']
-        #self.pitchers = ['SP', 'RP', 'P']
-        #self.sigmoid_cut = sigmoid_cut
+        self.batter_stats = batter_stats
+        self.pitcher_stats = pitcher_stats
 
         simulation_output = self.simulate_multiple_drafts(silent=silent)
         compiled_player_rankings = self.compile_simulation_results(simulation_output, self.number_sims, self.number_teams)
@@ -50,7 +48,7 @@ class Simulation:
 
         return simulation_output,average_rankings
 
-    def simulate_multiple_drafts(self, silent = True):
+    def simulate_multiple_drafts(self, shuffle_picks = True, silent = True):
 
         player_projections = Projection(path_data=self.path_projections,year=self.year,model=self.projection_type,ranking_method = self.ranking_method)
 
@@ -59,8 +57,10 @@ class Simulation:
 
         for isim in range(self.number_sims):
             print('Sim '+str(isim))
+
             draft_position_results = {}
             for idraft_position in (np.arange(self.number_teams) + 1):
+
                 # Get an instance of the Draft Class with your league-specific details and projection preference.
                 simulated_draft_position_i = Draft(player_projections,
                                      draft_position = idraft_position,
@@ -68,13 +68,10 @@ class Simulation:
                                      roster_spots = self.roster_spots,
                                      batter_stats = self.batter_stats,
                                      pitcher_stats = self.pitcher_stats)
-                simulated_draft_position_i.draft_all(naive_draft = False, silent = silent, shuffle_picks = True)
+                simulated_draft_position_i.draft_all(naive_draft = False, silent = silent, shuffle_picks = shuffle_picks)
                 draft_position_results[idraft_position] = simulated_draft_position_i.drafted_team
 
             simulation_results[isim] = draft_position_results
-
-        #simulated_compiled_player_rankings = self.compile_simulation_results(simulation_results, self.number_sims, self.number_teams)
-        #simulated_average_rankings = self.rank_simulation_result_averages(simulated_compiled_player_rankings)
 
         return simulation_results #simulated_compiled_player_rankings, simulated_average_rankings
 
@@ -121,6 +118,7 @@ class Simulation:
         for i in simulated_player_rankings:
             average_simulated_player_rankings[i] = np.mean(simulated_player_rankings[i][1:])
             simulated_player_positions[i] = rev_position_dict[simulated_player_rankings[i][0]]
+            
         ranked_players = sorted(average_simulated_player_rankings, key=average_simulated_player_rankings.get)
         ranked_values = [average_simulated_player_rankings[i] for i in ranked_players]
         ranked_positions = [simulated_player_positions[i] for i in ranked_players]
