@@ -337,24 +337,11 @@ class Draft:
         else:
             unfilled_positions = unfilled_positions0
 
-        #print('Choosing from' , unfilled_positions)
-        #pdb.set_trace()
-
         # Find index of best player at each remaining position
         filled_position_counter = np.ones(len(unfilled_positions)) * search_depth
         for iunfilled, icounter in zip(unfilled_positions, range(len(filled_position_counter))):
-            #if iunfilled == 'UTIL':
-            #    idx_position = [i for i, val in enumerate(df_copy.EligiblePosition.str.contains('|'.join(self.fielders))) if val]
-            #elif iunfilled == 'P':
-            #    idx_position = [i for i, val in enumerate(df_copy.EligiblePosition.str.contains('|'.join(self.pitchers))) if val]
-            #elif iunfilled == 'BN':
-            #    idx_position = [i for i, val in enumerate(df_copy.EligiblePosition.str.contains('|'.join(self.fielders+self.pitchers))) if val]
-            #else:
-            #    idx_position = [i for i, val in enumerate(df_copy.EligiblePosition.str.contains(iunfilled)) if val]
             idx_position = [i for i, val in enumerate(df_copy.EligiblePosition.str.contains(iunfilled)) if val]
-            #filled = False
             jdx = 0
-            #while filled == False:
             while filled_position_counter[icounter] > 0:
                 if idx_position[jdx] in idx_eligible:
                     jdx+=1
@@ -362,7 +349,6 @@ class Draft:
                     idx_eligible.append(idx_position[jdx])
                     pos_eligible.append(iunfilled)
                     filled_position_counter[icounter] -=  1
-                    #filled = True
 
         # Get rid of doubles (1B and OF is particularly prone)
         idx_eligible, idx_unique = np.unique(idx_eligible, return_index = True)
@@ -447,21 +433,6 @@ class Draft:
                         best_score = best_player_scores[idx_best_player_scores[idx_best]]
                         break
 
-        # Need to not fill UTIL if other opening exist...
-        #if (best_position == 'UTIL') or (best_position == 'BN'):
-        #    alternative_positions = unfilled_positions
-        #    player_positions = best_player.EligiblePosition.values[0].split('/')
-        #    if any('P' in s for s in alternative_positions):
-        #        if 'SP' in alternative_positions: alternative_positions.remove('SP')
-        #        if 'RP' in alternative_positions: alternative_positions.remove('RP')
-        #        if 'P' in alternative_positions: alternative_positions.remove('P')
-        #    for altp in player_positions:
-        #        if any(altp in s for s in alternative_positions):
-        #            best_position = altp
-        #            if silent == False:
-        #                print('Swapping UTIL with '+ best_position)
-
-        #pdb.set_trace()
         return best_pick_plus_one, best_position, best_player, best_placement, best_score
 
     # Strategy is to take the best possible player, even if that means putting them in UTIL or BN (maybe BN should reconsidered...)
@@ -493,32 +464,13 @@ class Draft:
                 pick_ok = True
                 prob_ok = True
 
-                # Draft next in list by making indices of unfilled_positions and taking first (or shuffle).
-                #try:
+                # Draft next in list by making indices of unfilled_positions and taking first (or shuffle)
                 df_copy,drafted_player=df_copy.drop(df_copy.iloc[idx_eligible[idf]:idx_eligible[idf]+1].index),df_copy.iloc[idx_eligible[idf]:idx_eligible[idf]+1]
-                #except:
-                #    pdb.set_trace()
 
                 # Get eligible positions
                 eligible_positions = drafted_player.EligiblePosition.values[0]
 
-                # Find best position opening.  Return 0 if no room
-                #position = self.get_optimal_position(eligible_positions, teams[team_key]['roster_spots'])
-
-                # Update Rosters with drafted_player, Loop otherwise
-                #if prob_ok == False:
-                #    idf += 1
-                #    pick_ok = False
-                #elif position == 0:
-                #    pdb.set_trace()
-                #    idf += 1
-                #    if len(unfilled_positions) > 0:
-                #        pick_ok = False
-                #    else:
-                #        pick_ok = True
-                #else:
                 if silent == False:
-                    #print('Team '+ str(team_key+1) +' Drafting '+drafted_player.iloc[0].PLAYER+' for '+position)
                     print('Team '+ str(team_key+1) +' Drafting '+drafted_player.iloc[0].PLAYER)
                 df = df_copy
                 pick_ok = True
