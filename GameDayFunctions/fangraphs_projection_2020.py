@@ -130,5 +130,5 @@ class Projection:
                     self.pitchers_stats['BSV'][ind] = np.floor(self.pitchers_stats['IP'][ind] * 0.05 * (1./self.pitchers_stats['WHIP'][ind]))
 
 def standardize_name(name_in):
-    name_out = ((((name_in.replace('ñ','n')).replace('í','i')).replace('é','e')).replace('á','a')).split(' Jr.')
+    name_out = ((((((name_in.replace('ñ','n')).replace('í','i')).replace('é','e')).replace('á','a')).replace('ú','u')).replace('ó','o')).split(' Jr.')
     return name_out[0]
