@@ -124,6 +124,7 @@ class Draft:
             recorded_position = 'BN'
         else:
             pdb.set_trace()
+        #print(str(single_team['roster_spots'][recorded_position])+' '+recorded_position+' left')
 
         if silent == False:
             print('Picked '+ drafted_player.iloc[0].PLAYER + '('+ drafted_player.iloc[0].EligiblePosition +')' +' for ' + recorded_position)
@@ -257,6 +258,8 @@ class Draft:
 
             # Finish the draft by picking the next best player in an open position
             for iteam in draft_order:
+                if sum(teams_copy[iteam]['roster_spots'].values()) == 0:
+                    pdb.set_trace()
                 teams_copy, df_copy = self.draft_next_best(iteam, teams_copy, df_copy, shuffle_picks = shuffle_picks)
 
         return teams_copy, df_copy
@@ -297,7 +300,7 @@ class Draft:
 
             # LOOP OVER WHOLE REST OF THE DRAFT HERE...
             teams_loop, df_loop = self.draft_remaining(teams_loop, df_loop, round_key, autodraft_depth = autodraft_depth)
-
+            #pdb.set_trace()
             # Calculate the best pseudo-standings
             #pseudo_team_stats, pseudo_batting_stats, pseudo_pitching_stats, pseudo_standings, pseudo_placement = self.tabulate_roto(teams_loop)
             roto_stats = self.tabulate_roto(teams_loop)
@@ -422,8 +425,6 @@ class Draft:
     def draft_next_best(self, team_key, teams, df, force_pick = False, force_position = False, shuffle_picks = False, search_depth = 1, silent = True):
 
         if (force_pick == False):
-            pick_ok = False
-            idf = 0
 
             # Get rid of the bench until the final rounds.
             teams_minus_bench = teams[team_key]['roster_spots'].copy()
@@ -439,29 +440,20 @@ class Draft:
             if shuffle_picks == True:
                 np.random.shuffle(idx_shuffle)
                 idx_eligible = idx_eligible[idx_shuffle]
-                pos_eligible = [pos_eligible[x] for x in idx_shuffle] # pos_eligible[idx_shuffle]
+                pos_eligible = [pos_eligible[x] for x in idx_shuffle]
 
-            # Find next pick
-            while (pick_ok == False):
-                df_copy = copy.deepcopy(df)
-                pick_ok = True
-                prob_ok = True
+            # Draft next in list by making indices of unfilled_positions and taking first (or shuffle)
+            try:
+                df,drafted_player=df.drop(df.iloc[idx_eligible[0]:idx_eligible[0]+1].index),df.iloc[idx_eligible[0]:idx_eligible[0]+1]
+            except:
+                pdb.set_trace()
 
-                # Draft next in list by making indices of unfilled_positions and taking first (or shuffle)
-                df_copy,drafted_player=df_copy.drop(df_copy.iloc[idx_eligible[idf]:idx_eligible[idf]+1].index),df_copy.iloc[idx_eligible[idf]:idx_eligible[idf]+1]
-
-                # Get eligible positions
-                eligible_positions = drafted_player.EligiblePosition.values[0]
-
-                if silent == False:
-                    print('Team '+ str(team_key+1) +' Drafting '+drafted_player.iloc[0].PLAYER)
-                df = df_copy
-                pick_ok = True
-                teams[team_key] = self.draft_into_teams(teams[team_key], drafted_player, silent = True)
+            teams[team_key] = self.draft_into_teams(teams[team_key], drafted_player, silent = True)
+            if silent == False:
+                print('Team '+ str(team_key+1) +' Drafting '+drafted_player.iloc[0].PLAYER)
 
         else:
 
-            pick_ok = True
             pick = force_pick - 1
             df,drafted_player=df.drop(df.iloc[pick:pick+1].index),df.iloc[pick:pick+1]
             teams[team_key] = self.draft_into_teams(teams[team_key], drafted_player, position = force_position, silent = True)
@@ -476,7 +468,8 @@ class Draft:
         # Read current draft results
         xls = pd.ExcelFile(os.path.join(path_list,draft_pick_file))
         complete_player_list = pd.read_excel(xls, skiprows =0, names = ['Pick','PLAYER','EligiblePosition'], index_col = 'Pick')
-        player_list = complete_player_list.loc[complete_player_list.index.dropna().values]
+        # Remove players from list who don't have numbers (i.e., NANs)
+        player_list = complete_player_list.loc[complete_player_list.index.dropna().values].sort_index()
 
         # Replace non-latin characters so lists agree
         for irename in range(len(player_list)):
@@ -506,9 +499,11 @@ class Draft:
             if len(player_list) == 0:
                 break
 
+        #pdb.set_trace()
         # Find best pick
         if silent == False:
             print('Finding Best Pick For Team '+str(iteam+1+iter_team))
+
         best_pick, best_position, best_placement, best_score = self.find_best_pick(iteam+iter_team,copy.deepcopy(teams_copy),copy.deepcopy(df_copy),iround,silent=False,autodraft_depth = autodraft_depth, search_depth = search_depth)
         best_player_this_round = df_copy.iloc[best_pick-1].PLAYER
         teams_copy, df_copy = self.draft_next_best(iteam+iter_team, teams_copy, df_copy, force_pick = best_pick, force_position = best_position)

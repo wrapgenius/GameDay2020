@@ -22,12 +22,15 @@ class Simulation:
                  year = 2020,
                  number_teams = 12,
                  number_sims = 50,
-                 shuffle_picks = True,
                  path_sims = 'simulations/',
                  roster_spots = {'C':1,'1B':1,'2B':1, '3B':1,'SS':1,'OF':3,'UTIL':1,'SP':2,'RP':2,'P':3,'BN':1},
                  batter_stats  = ['AB','R','1B','2B', '3B','HR','RBI','SB','BB','AVG','OPS'],
                  pitcher_stats = ['IP','W', 'L','CG','SHO','SV','BB','SO','ERA','WHIP','BSV'],
                  filter_injured_players = True,
+                 naive_draft = False,
+                 shuffle_picks = True,
+                 search_depth = 2,
+                 autodraft_depth = 'end',
                  sigmoid_cut = 1e-6):
 
         self.projection_type = projection_type
@@ -41,14 +44,15 @@ class Simulation:
         self.batter_stats = batter_stats
         self.pitcher_stats = pitcher_stats
 
-        simulation_output = self.simulate_multiple_drafts(silent=silent)
+        simulation_output = self.simulate_multiple_drafts(naive_draft = naive_draft, shuffle_picks = shuffle_picks, search_depth = search_depth, autodraft_depth = autodraft_depth, silent=silent)
+        #pdb.set_trace()
         compiled_player_rankings = self.compile_simulation_results(simulation_output, self.number_sims, self.number_teams)
         average_rankings = self.rank_simulation_result_averages(compiled_player_rankings)
         self.write_simulation_results(simulation_output,average_rankings)
 
         return simulation_output,average_rankings
 
-    def simulate_multiple_drafts(self, shuffle_picks = True, silent = True):
+    def simulate_multiple_drafts(self, naive_draft = False, shuffle_picks = True, search_depth = 2, autodraft_depth = 'end', silent = True):
 
         player_projections = Projection(path_data=self.path_projections,year=self.year,model=self.projection_type,ranking_method = self.ranking_method)
 
@@ -68,14 +72,14 @@ class Simulation:
                                      roster_spots = self.roster_spots,
                                      batter_stats = self.batter_stats,
                                      pitcher_stats = self.pitcher_stats)
-                simulated_draft_position_i.draft_all(naive_draft = False, silent = silent, shuffle_picks = shuffle_picks)
+                simulated_draft_position_i.draft_all(naive_draft = naive_draft, search_depth = search_depth, shuffle_picks = shuffle_picks, silent = silent)
                 draft_position_results[idraft_position] = simulated_draft_position_i.drafted_team
 
             simulation_results[isim] = draft_position_results
 
         return simulation_results #simulated_compiled_player_rankings, simulated_average_rankings
 
-    def compile_simulation_results(simulation_results, number_sims, number_teams):
+    def compile_simulation_results(self, simulation_results, number_sims, number_teams):
 
         # Give each position a number to add as first entry in simulated_player_rankings
         position_dict = {'C':1,'1B':2,'2B':3,'SS':4,'3B':5,'OF':6,'SP':7,'RP':8,'P':9,'UTIL':10,'BN':11}
@@ -108,7 +112,7 @@ class Simulation:
 
         return simulated_player_rankings
 
-    def rank_simulation_result_averages(simulated_player_rankings):
+    def rank_simulation_result_averages(self, simulated_player_rankings):
 
         # Give each position a number, in reverse, to back out position from first entry in simulated_player_rankings
         rev_position_dict = {1:'C',2:'1B',3:'2B',4:'SS',5:'3B',6:'OF',7:'SP',8:'RP',9:'P',10:'UTIL',11:'BN'}
@@ -118,7 +122,7 @@ class Simulation:
         for i in simulated_player_rankings:
             average_simulated_player_rankings[i] = np.mean(simulated_player_rankings[i][1:])
             simulated_player_positions[i] = rev_position_dict[simulated_player_rankings[i][0]]
-            
+
         ranked_players = sorted(average_simulated_player_rankings, key=average_simulated_player_rankings.get)
         ranked_values = [average_simulated_player_rankings[i] for i in ranked_players]
         ranked_positions = [simulated_player_positions[i] for i in ranked_players]
@@ -134,4 +138,4 @@ class Simulation:
         outfile.close()
 
         file_rank = 'Player_Ranking_' + self.projection_type + '_' + self.ranking_method + '_' + str(self.number_teams) + '_teams_' + str(self.number_sims) + '_sims.csv'
-        simulated_average_rankings.to_csv(path_sims+file_rank)
+        simulated_average_rankings.to_csv(self.path_sims+file_rank)
