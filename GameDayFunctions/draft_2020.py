@@ -93,19 +93,23 @@ class Draft:
     def draft_into_teams(self, single_team, drafted_player, position = None, silent = False):
         # Put the drafted_player with specified position into the roster of single_team.
 
+        name = drafted_player.iloc[0].PLAYER
+        first_name = name.split(' ')[0]
+        last_name = name.split(' ')[1]
         if position == None:
             #pdb.set_trace()
-            eligible_positions = drafted_player.EligiblePosition.values[0]
+            eligible_positions = drafted_player['Elig. Pos.'].values[0]
             position = self.get_optimal_position(eligible_positions, single_team['roster_spots'])
 
         # Different Stats Entries for Pitchers and Batters
-        if drafted_player.EligiblePosition.str.contains('P').bool() == True:
-            idx_player = self.player_projections.pitchers_stats.Name.values == drafted_player.iloc[0].PLAYER
+        #pdb.set_trace()
+        if drafted_player['Elig. Pos.'].str.contains('P').bool() == True:
+            idx_player = self.player_projections.pitchers_stats.Name.str.contains(first_name+' '+last_name)
             statline = self.player_projections.pitchers_stats[idx_player][single_team['pitching_stats'].keys()]
             single_team['pitching_stats'] = single_team['pitching_stats'].append(statline[0:1])
 
         else:
-            idx_player = self.player_projections.hitters_stats.Name.values == drafted_player.iloc[0].PLAYER
+            idx_player = self.player_projections.hitters_stats.Name.str.contains(first_name+' '+last_name)
             statline = self.player_projections.hitters_stats[idx_player][single_team['batting_stats'].keys()]
             single_team['batting_stats'] = single_team['batting_stats'].append(statline[0:1])
 
@@ -113,10 +117,13 @@ class Draft:
         if single_team['roster_spots'][position] > 0:
             single_team['roster_spots'][position] -= 1
             recorded_position = position
-        elif (drafted_player.EligiblePosition.str.contains('P').bool() == True) and (single_team['roster_spots']['P'] > 0):
+        elif (drafted_player['Elig. Pos.'].str.contains('F').bool() == True) and (single_team['roster_spots']['OF'] > 0):
+            single_team['roster_spots']['OF'] -= 1
+            recorded_position = 'OF'
+        elif (drafted_player['Elig. Pos.'].str.contains('P').bool() == True) and (single_team['roster_spots']['P'] > 0):
             single_team['roster_spots']['P'] -= 1
             recorded_position = 'P'
-        elif (drafted_player.EligiblePosition.str.contains('P').bool() == False) and (single_team['roster_spots']['UTIL'] > 0):
+        elif (drafted_player['Elig. Pos.'].str.contains('P').bool() == False) and (single_team['roster_spots']['UTIL'] > 0):
             single_team['roster_spots']['UTIL'] -= 1
             recorded_position = 'UTIL'
         elif (single_team['roster_spots']['BN'] > 0):
@@ -356,9 +363,10 @@ class Draft:
         # Find index of best player at each remaining position
         filled_position_counter = np.ones(len(unfilled_positions)) * search_depth
         for iunfilled, icounter in zip(unfilled_positions, range(len(filled_position_counter))):
-            idx_position = [i for i, val in enumerate(df_copy.EligiblePosition.str.contains(iunfilled)) if val]
+            idx_position = [i for i, val in enumerate(df_copy['Elig. Pos.'].str.contains(iunfilled)) if val]
             jdx = 0
             while filled_position_counter[icounter] > 0:
+                pdb.set_trace()
                 if idx_position[jdx] in idx_eligible:
                     jdx+=1
                 else:
@@ -492,7 +500,8 @@ class Draft:
                 # Find player matching df_copy by iloc
                 idx_match = [i for i, x in enumerate(df_copy['PLAYER'].str.match(player_list.PLAYER.iloc[0])) if x]
                 player_list,drafted_player=player_list.drop(player_list.iloc[0:1].index),player_list.iloc[0]
-                best_position = self.get_optimal_position(drafted_player.EligiblePosition, teams_copy[iteam]['roster_spots'])
+                #pdb.set_trace()
+                best_position = self.get_optimal_position(drafted_player['EligiblePosition'], teams_copy[iteam]['roster_spots'])
                 teams_copy, df_copy = self.draft_next_best(iteam, teams_copy, df_copy, force_pick = idx_match[0] + 1, force_position = best_position)
                 if len(player_list) == 0:
                     break
@@ -525,7 +534,8 @@ class Draft:
 
         xls = pd.ExcelFile(os.path.join(path_list,injured_list_file))
         #pdb.set_trace()
-        injured_list = pd.read_excel(xls, skiprows =0, names = ['PLAYER','Elig. Pos.'])#, index_col = 'PLAYER')
+        #injured_list = pd.read_excel(xls, skiprows =0, names = ['PLAYER','Elig. Pos.'])#, index_col = 'PLAYER')
+        injured_list = pd.read_excel(xls, skiprows =0)#, index_col = 'PLAYER')
         #xls = pd.ExcelFile(os.path.join(path_list,draft_pick_file))
         #complete_player_list = pd.read_excel(xls, skiprows =0, names = ['Pick','PLAYER','EligiblePosition'], index_col = 'Pick')
         player_list = injured_list.loc[injured_list.index.dropna().values]
