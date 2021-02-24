@@ -93,19 +93,23 @@ class Draft:
     def draft_into_teams(self, single_team, drafted_player, position = None, silent = False):
         # Put the drafted_player with specified position into the roster of single_team.
 
+        name = drafted_player.iloc[0].PLAYER
+        first_name = name.split(' ')[0]
+        last_name = name.split(' ')[1]
         if position == None:
             #pdb.set_trace()
-            eligible_positions = drafted_player.EligiblePosition.values[0]
+            eligible_positions = drafted_player['Elig. Pos.'].values[0]
             position = self.get_optimal_position(eligible_positions, single_team['roster_spots'])
 
         # Different Stats Entries for Pitchers and Batters
-        if drafted_player.EligiblePosition.str.contains('P').bool() == True:
-            idx_player = self.player_projections.pitchers_stats.Name.values == drafted_player.iloc[0].PLAYER
+        #pdb.set_trace()
+        if drafted_player['Elig. Pos.'].str.contains('P').bool() == True:
+            idx_player = self.player_projections.pitchers_stats.Name.str.contains(first_name+' '+last_name)
             statline = self.player_projections.pitchers_stats[idx_player][single_team['pitching_stats'].keys()]
             single_team['pitching_stats'] = single_team['pitching_stats'].append(statline[0:1])
 
         else:
-            idx_player = self.player_projections.hitters_stats.Name.values == drafted_player.iloc[0].PLAYER
+            idx_player = self.player_projections.hitters_stats.Name.str.contains(first_name+' '+last_name)
             statline = self.player_projections.hitters_stats[idx_player][single_team['batting_stats'].keys()]
             single_team['batting_stats'] = single_team['batting_stats'].append(statline[0:1])
 
@@ -113,10 +117,13 @@ class Draft:
         if single_team['roster_spots'][position] > 0:
             single_team['roster_spots'][position] -= 1
             recorded_position = position
-        elif (drafted_player.EligiblePosition.str.contains('P').bool() == True) and (single_team['roster_spots']['P'] > 0):
+        elif (drafted_player['Elig. Pos.'].str.contains('F').bool() == True) and (single_team['roster_spots']['OF'] > 0):
+            single_team['roster_spots']['OF'] -= 1
+            recorded_position = 'OF'
+        elif (drafted_player['Elig. Pos.'].str.contains('P').bool() == True) and (single_team['roster_spots']['P'] > 0):
             single_team['roster_spots']['P'] -= 1
             recorded_position = 'P'
-        elif (drafted_player.EligiblePosition.str.contains('P').bool() == False) and (single_team['roster_spots']['UTIL'] > 0):
+        elif (drafted_player['Elig. Pos.'].str.contains('P').bool() == False) and (single_team['roster_spots']['UTIL'] > 0):
             single_team['roster_spots']['UTIL'] -= 1
             recorded_position = 'UTIL'
         elif (single_team['roster_spots']['BN'] > 0):
@@ -161,7 +168,7 @@ class Draft:
 
         # Check Hitters
         Util = False
-        if ('C' in single_positions):
+        if ('C' in single_positions) & ('CF' not in single_positions):
             Util = True
             if (roster_spots['C'] > 0): return  'C'
         if ('1B' in single_positions):
@@ -170,7 +177,7 @@ class Draft:
         if ('2B' in single_positions):
             Util = True
             if (roster_spots['2B'] > 0): return  '2B'
-        if ('OF' in single_positions):
+        if ('OF' in single_positions) | ('LF' in single_positions) | ('CF' in single_positions) | ('RF' in single_positions):
             Util = True
             if (roster_spots['OF'] > 0): return  'OF'
         if ('SS' in single_positions):
@@ -300,7 +307,7 @@ class Draft:
 
             # LOOP OVER WHOLE REST OF THE DRAFT HERE...
             teams_loop, df_loop = self.draft_remaining(teams_loop, df_loop, round_key, autodraft_depth = autodraft_depth)
-            #pdb.set_trace()
+
             # Calculate the best pseudo-standings
             #pseudo_team_stats, pseudo_batting_stats, pseudo_pitching_stats, pseudo_standings, pseudo_placement = self.tabulate_roto(teams_loop)
             roto_stats = self.tabulate_roto(teams_loop)
@@ -322,6 +329,8 @@ class Draft:
                 if silent == False:
                     print('Not Storing Result for Pick '+str(icounter)+' ['+str(pick_number)+'/'+str(drafted_player.index[0])+'] '+iplayer+' '+pos_eligible[icounter])
 
+            #pdb.set_trace()
+
         # Pick best of the bunch
         #pdb.set_trace()
         best_pick_plus_one, best_position, best_player, best_placement, best_score = self.decide_best_choice(df_copy, player_based_drafted_teams, player_based_drafted_outcomes,unfilled_positions, idx_eligible, pos_eligible, silent=silent)
@@ -330,7 +339,7 @@ class Draft:
         #################################
 
     def idx_unfilled_positions(self,df_copy, unfilled_positions0, search_depth = 1):
-        # Identify positions that still need filling, taking into acount that UTIL
+        # Identify positions that still need filling, taking into account that UTIL
         # can be filled by any batting position and so should be saved for last,
         # and that SP/RP should be filled before P.
         idx_eligible = []
@@ -356,9 +365,18 @@ class Draft:
         # Find index of best player at each remaining position
         filled_position_counter = np.ones(len(unfilled_positions)) * search_depth
         for iunfilled, icounter in zip(unfilled_positions, range(len(filled_position_counter))):
-            idx_position = [i for i, val in enumerate(df_copy.EligiblePosition.str.contains(iunfilled)) if val]
+            if iunfilled == 'OF':
+                punfilled = 'F'
+            else:
+                punfilled = iunfilled
+            if iunfilled == 'C':
+                idx_position = [i for i, val in enumerate(df_copy['Elig. Pos.'].str.contains('C') & ~df_copy['Elig. Pos.'].str.contains('CF')) if val]
+            else:
+                idx_position = [i for i, val in enumerate(df_copy['Elig. Pos.'].str.contains(punfilled)) if val]
             jdx = 0
             while filled_position_counter[icounter] > 0:
+                if jdx == len(idx_position):
+                    pdb.set_trace()
                 if idx_position[jdx] in idx_eligible:
                     jdx+=1
                 else:
@@ -435,6 +453,7 @@ class Draft:
             # Find unfilled positions and their indices
             unfilled_positions = [k for (k,v) in teams_minus_bench.items() if v > 0]
             idx_eligible, pos_eligible = self.idx_unfilled_positions(df, unfilled_positions, search_depth = search_depth)
+            #pdb.set_trace()
 
             idx_shuffle = np.arange(len(idx_eligible))
             if shuffle_picks == True:
@@ -492,7 +511,8 @@ class Draft:
                 # Find player matching df_copy by iloc
                 idx_match = [i for i, x in enumerate(df_copy['PLAYER'].str.match(player_list.PLAYER.iloc[0])) if x]
                 player_list,drafted_player=player_list.drop(player_list.iloc[0:1].index),player_list.iloc[0]
-                best_position = self.get_optimal_position(drafted_player.EligiblePosition, teams_copy[iteam]['roster_spots'])
+                #pdb.set_trace()
+                best_position = self.get_optimal_position(drafted_player['EligiblePosition'], teams_copy[iteam]['roster_spots'])
                 teams_copy, df_copy = self.draft_next_best(iteam, teams_copy, df_copy, force_pick = idx_match[0] + 1, force_position = best_position)
                 if len(player_list) == 0:
                     break
@@ -525,7 +545,8 @@ class Draft:
 
         xls = pd.ExcelFile(os.path.join(path_list,injured_list_file))
         #pdb.set_trace()
-        injured_list = pd.read_excel(xls, skiprows =0, names = ['PLAYER','Elig. Pos.'])#, index_col = 'PLAYER')
+        #injured_list = pd.read_excel(xls, skiprows =0, names = ['PLAYER','Elig. Pos.'])#, index_col = 'PLAYER')
+        injured_list = pd.read_excel(xls, skiprows =0)#, index_col = 'PLAYER')
         #xls = pd.ExcelFile(os.path.join(path_list,draft_pick_file))
         #complete_player_list = pd.read_excel(xls, skiprows =0, names = ['Pick','PLAYER','EligiblePosition'], index_col = 'Pick')
         player_list = injured_list.loc[injured_list.index.dropna().values]
