@@ -168,7 +168,7 @@ class Draft:
 
         # Check Hitters
         Util = False
-        if ('C' in single_positions):
+        if ('C' in single_positions) & ('CF' not in single_positions):
             Util = True
             if (roster_spots['C'] > 0): return  'C'
         if ('1B' in single_positions):
@@ -177,7 +177,7 @@ class Draft:
         if ('2B' in single_positions):
             Util = True
             if (roster_spots['2B'] > 0): return  '2B'
-        if ('OF' in single_positions):
+        if ('OF' in single_positions) | ('LF' in single_positions) | ('CF' in single_positions) | ('RF' in single_positions):
             Util = True
             if (roster_spots['OF'] > 0): return  'OF'
         if ('SS' in single_positions):
@@ -307,7 +307,7 @@ class Draft:
 
             # LOOP OVER WHOLE REST OF THE DRAFT HERE...
             teams_loop, df_loop = self.draft_remaining(teams_loop, df_loop, round_key, autodraft_depth = autodraft_depth)
-            #pdb.set_trace()
+
             # Calculate the best pseudo-standings
             #pseudo_team_stats, pseudo_batting_stats, pseudo_pitching_stats, pseudo_standings, pseudo_placement = self.tabulate_roto(teams_loop)
             roto_stats = self.tabulate_roto(teams_loop)
@@ -329,6 +329,8 @@ class Draft:
                 if silent == False:
                     print('Not Storing Result for Pick '+str(icounter)+' ['+str(pick_number)+'/'+str(drafted_player.index[0])+'] '+iplayer+' '+pos_eligible[icounter])
 
+            #pdb.set_trace()
+
         # Pick best of the bunch
         #pdb.set_trace()
         best_pick_plus_one, best_position, best_player, best_placement, best_score = self.decide_best_choice(df_copy, player_based_drafted_teams, player_based_drafted_outcomes,unfilled_positions, idx_eligible, pos_eligible, silent=silent)
@@ -337,7 +339,7 @@ class Draft:
         #################################
 
     def idx_unfilled_positions(self,df_copy, unfilled_positions0, search_depth = 1):
-        # Identify positions that still need filling, taking into acount that UTIL
+        # Identify positions that still need filling, taking into account that UTIL
         # can be filled by any batting position and so should be saved for last,
         # and that SP/RP should be filled before P.
         idx_eligible = []
@@ -363,10 +365,18 @@ class Draft:
         # Find index of best player at each remaining position
         filled_position_counter = np.ones(len(unfilled_positions)) * search_depth
         for iunfilled, icounter in zip(unfilled_positions, range(len(filled_position_counter))):
-            idx_position = [i for i, val in enumerate(df_copy['Elig. Pos.'].str.contains(iunfilled)) if val]
+            if iunfilled == 'OF':
+                punfilled = 'F'
+            else:
+                punfilled = iunfilled
+            if iunfilled == 'C':
+                idx_position = [i for i, val in enumerate(df_copy['Elig. Pos.'].str.contains('C') & ~df_copy['Elig. Pos.'].str.contains('CF')) if val]
+            else:
+                idx_position = [i for i, val in enumerate(df_copy['Elig. Pos.'].str.contains(punfilled)) if val]
             jdx = 0
             while filled_position_counter[icounter] > 0:
-                pdb.set_trace()
+                if jdx == len(idx_position):
+                    pdb.set_trace()
                 if idx_position[jdx] in idx_eligible:
                     jdx+=1
                 else:
@@ -443,6 +453,7 @@ class Draft:
             # Find unfilled positions and their indices
             unfilled_positions = [k for (k,v) in teams_minus_bench.items() if v > 0]
             idx_eligible, pos_eligible = self.idx_unfilled_positions(df, unfilled_positions, search_depth = search_depth)
+            #pdb.set_trace()
 
             idx_shuffle = np.arange(len(idx_eligible))
             if shuffle_picks == True:
