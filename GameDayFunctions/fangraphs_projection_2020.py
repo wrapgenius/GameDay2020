@@ -34,7 +34,7 @@ class Projection:
     '''
 
     def __init__(self, model = 'ZiPS', year = 2020, path_data = "projections/",
-                 ranking_method = 'Yahoo', ranking_file = False):
+                 ranking_method = 'FantasyPros', ranking_file = False):
         self.statline = {}
         self.all_rank = {}
         self.hitters_rank = {}
@@ -70,7 +70,7 @@ class Projection:
         # Loop through all files in path.
         for file in os.listdir(path_data+str(year)+'/'):
             # Skip files that don't end in a position.
-            print(file)
+            # print(file)
             #pdb.set_trace()
 
             if file.startswith(model) & file.endswith('Hitters.csv'):
